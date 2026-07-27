@@ -86,7 +86,8 @@ The approved initial V2 scope is:
 - Hybrid-capture paired-end short-read WES
 - Illumina sequencing
 - GeneMind sequencing after separate assay-specific validation
-- GRCh38
+- Broad GRCh38 Full Analysis Set + Decoy + HLA
+  (`GRCh38_full_analysis_set_plus_decoy_hla.fa`) exclusively
 
 The following are outside the initial V2 scope:
 
@@ -303,7 +304,8 @@ Preflight performs aggregated checks for:
 - Configurable free-space requirements
 - Presence and SHA-256 integrity of every SIF required through the selected stage
 - Executable availability and locked tool-version compatibility
-- GRCh38 FASTA, indexes, dictionaries, and interval files
+- The locked Broad GRCh38 Full Analysis Set + Decoy + HLA FASTA, its exact
+  indexes, dictionary, ALT metadata, and interval files
 - Stage-required references, databases, caches, plugins, and trained models
 - Assembly and reference/database compatibility
 - Required checksums and external-resource manifest consistency
@@ -404,15 +406,19 @@ DATABASE_DIR/
 └── database_manifest.tsv
 ```
 
-Requirements are stage-aware. Through Module 13, the configured GRCh38 FASTA
-and indexes, reportable/capture intervals, known-indel resources, caller
-containers, and matching DeepVariant model are mandatory. ClinVar, dbSNP,
-gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP become mandatory at Module 14.
-ACMG resources are deferred until Module 15; REVEL is optional at that stage.
+Requirements are stage-aware. From alignment onward, preflight accepts only
+Broad GRCh38 Full Analysis Set + Decoy + HLA:
+`GRCh38_full_analysis_set_plus_decoy_hla.fa`, reference identity
+`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. Its exact indexes,
+reportable/capture intervals, variant-calling resources, caller containers, and
+matching DeepVariant model are mandatory at their first consuming stage.
+ClinVar, dbSNP, gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP remain external
+and become mandatory at Module 14. ACMG resources are deferred until Module 15;
+REVEL is optional at that stage.
 
-Resource rows carry an assembly declaration and checksum. Database rows also
-record the compatible FASTA SHA-256 so preflight can reject mixed reference
-builds.
+Resource rows carry the locked reference identity, assembly declaration, and
+checksum. Database rows also record the compatible FASTA SHA-256 so preflight
+can reject mixed reference bundles.
 
 ClinicalSuite never infers, downloads, replaces, or updates these resources
 during a run. Consult:

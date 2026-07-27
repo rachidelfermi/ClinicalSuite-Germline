@@ -14,24 +14,27 @@ readonly DEFAULT_OUTPUT_DIR="$SCRIPT_DIR/GRCh38"
 readonly ALIGNMENT_IMAGE="$REPOSITORY_ROOT/containers/alignment.sif"
 readonly APPTAINER_BIN="${APPTAINER_BIN:-/usr/bin/apptainer}"
 
-readonly REFERENCE_VERSION='Broad-GATK-hg38-v0-GRCh38'
-readonly FASTA_NAME='Homo_sapiens_assembly38.fasta'
-readonly FASTA_GENERATION='1575676516681666'
-readonly FASTA_SIZE='3249912778'
-readonly FASTA_MD5='7ff134953dcca8c8997453bbb80b6b5e'
-readonly FASTA_URL="https://storage.googleapis.com/download/storage/v1/b/gcp-public-data--broad-references/o/hg38%2Fv0%2F${FASTA_NAME}?alt=media&generation=${FASTA_GENERATION}"
-
-readonly ALT_SOURCE_NAME='Homo_sapiens_assembly38.fasta.64.alt'
+# This is the only reference identity accepted by ClinicalSuite V2.
+readonly REFERENCE_VERSION='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
+readonly SOURCE_ROOT='https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/GRCh38_reference_genome'
+readonly FASTA_NAME='GRCh38_full_analysis_set_plus_decoy_hla.fa'
+readonly FASTA_SIZE='3263683042'
+readonly FASTA_SHA256='3b103f4742abfd54938fb0333e19ad067635c8eb86f1dbf0ce44b165c4292b50'
+readonly FASTA_URL="$SOURCE_ROOT/$FASTA_NAME"
 readonly ALT_NAME="${FASTA_NAME}.alt"
-readonly ALT_GENERATION='1575676516489805'
 readonly ALT_SIZE='487553'
-readonly ALT_MD5='b07e65aa4425bc365141756f5c98328c'
-readonly ALT_URL="https://storage.googleapis.com/download/storage/v1/b/gcp-public-data--broad-references/o/hg38%2Fv0%2F${ALT_SOURCE_NAME}?alt=media&generation=${ALT_GENERATION}"
-
-readonly REGIONS_NAME='GCA_000001405.15_GRCh38_assembly_regions.txt'
-readonly REGIONS_SIZE='25524'
-readonly REGIONS_SHA256='6b91d2c7961a322936db8fd09b7fb4a9143a590882f28c0a628a4ef26897f6c7'
-readonly REGIONS_URL="https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/${REGIONS_NAME}"
+readonly ALT_SHA256='d9254da07b8030e26129dc29d9d02b9c30a360b233a367ce041691c00407d510'
+readonly ALT_URL="$SOURCE_ROOT/$ALT_NAME"
+readonly SOURCE_README_NAME='README.20150309.GRCh38_full_analysis_set_plus_decoy_hla'
+readonly SOURCE_README_SIZE='1973'
+readonly SOURCE_README_SHA256='f8662c7ff1b9abdf986eca668559d38a509d4b65cc553b0fa2ee64fe3d217ea1'
+readonly SOURCE_README_URL="$SOURCE_ROOT/$SOURCE_README_NAME"
+readonly REGIONS_NAME='20150713_location_of_centromeres_and_other_regions.txt'
+readonly REGIONS_SIZE='1300'
+readonly REGIONS_SHA256='998b492d65a60cc557735d90c9215bf934289f8040e4583bd4df8aa4c073c881'
+readonly REGIONS_URL="$SOURCE_ROOT/$REGIONS_NAME"
+readonly DICTIONARY_NAME='GRCh38_full_analysis_set_plus_decoy_hla.dict'
+readonly PAR_NAME='GRCh38_full_analysis_set_plus_decoy_hla_PAR.bed'
 readonly MIN_BWA_INDEX_MEMORY_BYTES='96000000000'
 
 ###############################################################################
@@ -42,11 +45,13 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [--output-dir DIR]
 
-Download the locked Broad GATK GRCh38 FASTA and ALT metadata, generate Samtools,
-Picard, and BWA-MEM2 indexes with the validated ClinicalSuite alignment image,
-and write checksums plus provenance. Annotation databases and known-sites VCFs
-are never downloaded. Local BWA-MEM2 index generation requires at least 96 GB
-of physical RAM.
+Download the locked Broad GRCh38 Full Analysis Set + Decoy + HLA FASTA and its
+official companion metadata. Generate Samtools, Picard, and BWA-MEM2 indexes
+with the validated ClinicalSuite alignment image and write checksums plus
+provenance. No other GRCh38 FASTA is supported. Annotation databases and
+known-sites VCFs are never downloaded.
+
+Local BWA-MEM2 index generation requires at least 96 GB of physical RAM.
 EOF
 }
 
@@ -56,30 +61,8 @@ die() {
 }
 
 require_command() {
-    command -v "$1" >/dev/null 2>&1 || die "required command is unavailable: $1"
-}
-
-download_locked_md5() {
-    local url="$1"
-    local destination="$2"
-    local expected_size="$3"
-    local expected_md5="$4"
-    local partial="${destination}.part"
-    local actual_size actual_md5
-
-    if [[ ! -f "$destination" ]]; then
-        printf 'DOWNLOAD: %s\n' "$url"
-        curl --fail --location --retry 5 --retry-all-errors \
-            --continue-at - --output "$partial" "$url"
-        mv -- "$partial" "$destination"
-    fi
-
-    actual_size="$(stat -c '%s' "$destination")"
-    [[ "$actual_size" == "$expected_size" ]] ||
-        die "size mismatch for $destination: expected $expected_size, found $actual_size"
-    actual_md5="$(md5sum "$destination" | awk '{print $1}')"
-    [[ "$actual_md5" == "$expected_md5" ]] ||
-        die "source MD5 mismatch for $destination"
+    command -v "$1" >/dev/null 2>&1 ||
+        die "required command is unavailable: $1"
 }
 
 download_locked_sha256() {
@@ -115,25 +98,43 @@ run_alignment_container() {
         "$ALIGNMENT_IMAGE" "$@"
 }
 
+validate_locked_fasta() {
+    local fasta="$1"
+    local fai="$2"
+    local contig_count
+
+    contig_count="$(wc -l <"$fai")"
+    [[ "$contig_count" -eq 3366 ]] ||
+        die "locked FASTA index must contain 3366 contigs; found $contig_count"
+    awk -F '\t' '
+        $1 == "chr1" {chr1 = 1}
+        $1 == "chrM" {chrM = 1}
+        $1 ~ /_decoy$/ {decoy = 1}
+        $1 ~ /^HLA-/ {hla = 1}
+        END {exit !(chr1 && chrM && decoy && hla)}
+    ' "$fai" ||
+        die "FASTA does not contain the locked chr, decoy, and HLA contig classes"
+    [[ "$(sha256sum "$fasta" | awk '{print $1}')" == "$FASTA_SHA256" ]] ||
+        die 'locked FASTA checksum changed after indexing'
+}
+
 write_par_intervals() {
-    local regions_file="$1"
-    local destination="$2"
+    local destination="$1"
     local temporary="${destination}.tmp.$$"
 
-    awk -F '\t' '
-        BEGIN {
-            OFS = "\t"
-            print "#assembly=GRCh38"
-            print "#source=GCA_000001405.15_GRCh38_assembly_regions.txt"
-            print "#coordinates=0-based-half-open"
-        }
-        $5 == "PAR" {
-            sub(/\r$/, "", $8)
-            print "chr" $2, $3 - 1, $4, $1
-        }
-    ' "$regions_file" >"$temporary"
-    [[ "$(awk '!/^#/ {count++} END {print count + 0}' "$temporary")" -eq 4 ]] ||
-        die 'expected four GRCh38 pseudoautosomal intervals'
+    # GRCh38 PAR coordinates are rendered as 0-based, half-open intervals.
+    # The Y coordinates are also recorded by the official companion regions
+    # file. X and Y rows are both emitted because callers require both copies.
+    {
+        printf '#assembly=GRCh38\n'
+        printf '#reference=%s\n' "$REFERENCE_VERSION"
+        printf '#coordinates=0-based-half-open\n'
+        printf '#source=GRC GRCh38 pseudoautosomal regions; 1000 Genomes companion regions metadata\n'
+        printf 'chrX\t10000\t2781479\tPAR1\n'
+        printf 'chrY\t10000\t2781479\tPAR1\n'
+        printf 'chrX\t155701382\t156030895\tPAR2\n'
+        printf 'chrY\t56887902\t57217415\tPAR2\n'
+    } >"$temporary"
     mv -- "$temporary" "$destination"
 }
 
@@ -141,22 +142,21 @@ write_download_provenance() {
     local output_dir="$1"
     local destination="$output_dir/source_downloads.tsv"
     local temporary="${destination}.tmp.$$"
-    local fasta_sha alt_sha regions_sha
+    local artifact source size expected_sha local_sha
 
-    fasta_sha="$(sha256sum "$output_dir/$FASTA_NAME" | awk '{print $1}')"
-    alt_sha="$(sha256sum "$output_dir/$ALT_SOURCE_NAME" | awk '{print $1}')"
-    regions_sha="$(sha256sum "$output_dir/$REGIONS_NAME" | awk '{print $1}')"
     {
-        printf 'artifact\tsource\tgeneration_or_version\tsize\tsource_digest\tlocal_sha256\n'
-        printf '%s\t%s\t%s\t%s\tmd5:%s\t%s\n' \
-            "$FASTA_NAME" "$FASTA_URL" "$FASTA_GENERATION" "$FASTA_SIZE" \
-            "$FASTA_MD5" "$fasta_sha"
-        printf '%s\t%s\t%s\t%s\tmd5:%s\t%s\n' \
-            "$ALT_SOURCE_NAME" "$ALT_URL" "$ALT_GENERATION" "$ALT_SIZE" \
-            "$ALT_MD5" "$alt_sha"
-        printf '%s\t%s\tGCA_000001405.15\t%s\tsha256:%s\t%s\n' \
-            "$REGIONS_NAME" "$REGIONS_URL" "$REGIONS_SIZE" \
-            "$REGIONS_SHA256" "$regions_sha"
+        printf 'artifact\tsource\tversion\tsize\tsource_sha256\tlocal_sha256\n'
+        while IFS=$'\t' read -r artifact source size expected_sha; do
+            local_sha="$(sha256sum "$output_dir/$artifact" | awk '{print $1}')"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$artifact" "$source" "$REFERENCE_VERSION" "$size" \
+                "$expected_sha" "$local_sha"
+        done <<EOF
+$FASTA_NAME	$FASTA_URL	$FASTA_SIZE	$FASTA_SHA256
+$ALT_NAME	$ALT_URL	$ALT_SIZE	$ALT_SHA256
+$SOURCE_README_NAME	$SOURCE_README_URL	$SOURCE_README_SIZE	$SOURCE_README_SHA256
+$REGIONS_NAME	$REGIONS_URL	$REGIONS_SIZE	$REGIONS_SHA256
+EOF
     } >"$temporary"
     chmod 0444 -- "$temporary"
     mv -- "$temporary" "$destination"
@@ -176,7 +176,7 @@ require_bwa_index_memory() {
 
 write_metadata() {
     local output_dir="$1"
-    local fasta_sha alt_sha regions_sha fai_sha dict_sha par_sha
+    local fasta_sha alt_sha regions_sha readme_sha fai_sha dict_sha par_sha
     local checksum_temporary="$output_dir/.checksums.sha256.tmp.$$"
     local provenance_temporary="$output_dir/.source_provenance.tsv.tmp.$$"
     local manifest_temporary="$output_dir/.reference_manifest.tsv.tmp.$$"
@@ -185,9 +185,10 @@ write_metadata() {
     fasta_sha="$(sha256sum "$output_dir/$FASTA_NAME" | awk '{print $1}')"
     alt_sha="$(sha256sum "$output_dir/bwa-mem2/$ALT_NAME" | awk '{print $1}')"
     regions_sha="$(sha256sum "$output_dir/$REGIONS_NAME" | awk '{print $1}')"
+    readme_sha="$(sha256sum "$output_dir/$SOURCE_README_NAME" | awk '{print $1}')"
     fai_sha="$(sha256sum "$output_dir/${FASTA_NAME}.fai" | awk '{print $1}')"
-    dict_sha="$(sha256sum "$output_dir/Homo_sapiens_assembly38.dict" | awk '{print $1}')"
-    par_sha="$(sha256sum "$output_dir/GRCh38_PAR.bed" | awk '{print $1}')"
+    dict_sha="$(sha256sum "$output_dir/$DICTIONARY_NAME" | awk '{print $1}')"
+    par_sha="$(sha256sum "$output_dir/$PAR_NAME" | awk '{print $1}')"
 
     (
         cd -- "$output_dir"
@@ -204,24 +205,27 @@ write_metadata() {
     ) >"$checksum_temporary"
 
     {
-        printf 'artifact\tsource\tversion_or_generation\tsource_size\tsource_digest\tlocal_sha256\n'
-        printf '%s\t%s\t%s\t%s\tmd5:%s\t%s\n' \
-            "$FASTA_NAME" "$FASTA_URL" "$FASTA_GENERATION" "$FASTA_SIZE" \
-            "$FASTA_MD5" "$fasta_sha"
-        printf 'bwa-mem2/%s\t%s\t%s\t%s\tmd5:%s\t%s\n' \
-            "$ALT_NAME" "$ALT_URL" "$ALT_GENERATION" "$ALT_SIZE" \
-            "$ALT_MD5" "$alt_sha"
-        printf '%s\t%s\tGCA_000001405.15\t%s\tsha256:%s\t%s\n' \
-            "$REGIONS_NAME" "$REGIONS_URL" "$REGIONS_SIZE" \
+        printf 'artifact\tsource\tversion\tsource_size\tsource_sha256\tlocal_sha256\n'
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$FASTA_NAME" "$FASTA_URL" "$REFERENCE_VERSION" "$FASTA_SIZE" \
+            "$FASTA_SHA256" "$fasta_sha"
+        printf 'bwa-mem2/%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$ALT_NAME" "$ALT_URL" "$REFERENCE_VERSION" "$ALT_SIZE" \
+            "$ALT_SHA256" "$alt_sha"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$SOURCE_README_NAME" "$SOURCE_README_URL" "$REFERENCE_VERSION" \
+            "$SOURCE_README_SIZE" "$SOURCE_README_SHA256" "$readme_sha"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$REGIONS_NAME" "$REGIONS_URL" "$REFERENCE_VERSION" "$REGIONS_SIZE" \
             "$REGIONS_SHA256" "$regions_sha"
         printf '%s.fai\tgenerated:Samtools-1.24\t%s\t-\t-\t%s\n' \
             "$FASTA_NAME" "$REFERENCE_VERSION" "$fai_sha"
-        printf 'Homo_sapiens_assembly38.dict\tgenerated:Picard-3.4.0\t%s\t-\t-\t%s\n' \
-            "$REFERENCE_VERSION" "$dict_sha"
-        printf 'bwa-mem2/\tgenerated:BWA-MEM2-2.3-release-asset\t%s\t-\t-\tsee-checksums.sha256\n' \
+        printf '%s\tgenerated:Picard-3.4.0\t%s\t-\t-\t%s\n' \
+            "$DICTIONARY_NAME" "$REFERENCE_VERSION" "$dict_sha"
+        printf 'bwa-mem2/\tgenerated:BWA-MEM2-2.3\t%s\t-\t-\tsee-checksums.sha256\n' \
             "$REFERENCE_VERSION"
-        printf 'GRCh38_PAR.bed\tderived:%s\tGCA_000001405.15\t-\t-\t%s\n' \
-            "$REGIONS_NAME" "$par_sha"
+        printf '%s\tderived:GRC-GRCh38-PAR\t%s\t-\t-\t%s\n' \
+            "$PAR_NAME" "$REFERENCE_VERSION" "$par_sha"
     } >"$provenance_temporary"
 
     {
@@ -230,13 +234,14 @@ write_metadata() {
             "$FASTA_NAME" "$REFERENCE_VERSION" "$fasta_sha"
         printf 'GRCH38_FASTA_FAI\t%s.fai\tFILE\tMANDATORY\tGRCh38\t%s\t%s\n' \
             "$FASTA_NAME" "$REFERENCE_VERSION" "$fai_sha"
-        printf 'GRCH38_SEQUENCE_DICTIONARY\tHomo_sapiens_assembly38.dict\tFILE\tMANDATORY\tGRCh38\t%s\t%s\n' \
-            "$REFERENCE_VERSION" "$dict_sha"
-        printf 'BWA_MEM2_INDEX\tbwa-mem2\tDIRECTORY\tMANDATORY\tGRCh38\tBWA-MEM2-2.3\t-\n'
-        printf 'GRCH38_PAR_INTERVALS\tGRCh38_PAR.bed\tFILE\tMANDATORY\tGRCh38\tGCA_000001405.15\t%s\n' \
-            "$par_sha"
-        printf 'GRCH38_ASSEMBLY_REGIONS\t%s\tFILE\tOPTIONAL\tGRCh38\tGCA_000001405.15\t%s\n' \
-            "$REGIONS_NAME" "$regions_sha"
+        printf 'GRCH38_SEQUENCE_DICTIONARY\t%s\tFILE\tMANDATORY\tGRCh38\t%s\t%s\n' \
+            "$DICTIONARY_NAME" "$REFERENCE_VERSION" "$dict_sha"
+        printf 'BWA_MEM2_INDEX\tbwa-mem2\tDIRECTORY\tMANDATORY\tGRCh38\t%s\t-\n' \
+            "$REFERENCE_VERSION"
+        printf 'GRCH38_PAR_INTERVALS\t%s\tFILE\tMANDATORY\tGRCh38\t%s\t%s\n' \
+            "$PAR_NAME" "$REFERENCE_VERSION" "$par_sha"
+        printf 'GRCH38_REGIONS_METADATA\t%s\tFILE\tOPTIONAL\tGRCh38\t%s\t%s\n' \
+            "$REGIONS_NAME" "$REFERENCE_VERSION" "$regions_sha"
     } >"$manifest_temporary"
 
     {
@@ -259,6 +264,7 @@ verify_complete_bundle() {
 
     [[ -f "$output_dir/.complete" && -f "$output_dir/checksums.sha256" ]] ||
         return 1
+    grep -Fxq "bundle=$REFERENCE_VERSION" "$output_dir/.complete" || return 1
     (cd -- "$output_dir" && sha256sum --check --quiet checksums.sha256)
 }
 
@@ -268,7 +274,7 @@ verify_complete_bundle() {
 
 main() {
     local output_dir="$DEFAULT_OUTPUT_DIR"
-    local fasta_path alt_source_path regions_path bwa_temporary
+    local fasta_path alt_path regions_path source_readme_path bwa_temporary
 
     while (( $# > 0 )); do
         case "$1" in
@@ -289,11 +295,12 @@ main() {
 
     [[ "$output_dir" == /* ]] || output_dir="$(pwd -P)/$output_dir"
     require_command curl
-    require_command md5sum
     require_command sha256sum
     require_command stat
-    [[ -x "$APPTAINER_BIN" ]] || die "Apptainer is unavailable: $APPTAINER_BIN"
-    [[ -s "$ALIGNMENT_IMAGE" ]] || die "alignment image is unavailable: $ALIGNMENT_IMAGE"
+    [[ -x "$APPTAINER_BIN" ]] ||
+        die "Apptainer is unavailable: $APPTAINER_BIN"
+    [[ -s "$ALIGNMENT_IMAGE" ]] ||
+        die "alignment image is unavailable: $ALIGNMENT_IMAGE"
 
     mkdir -p -- "$output_dir"
     if verify_complete_bundle "$output_dir"; then
@@ -302,14 +309,17 @@ main() {
     fi
 
     fasta_path="$output_dir/$FASTA_NAME"
-    alt_source_path="$output_dir/$ALT_SOURCE_NAME"
+    alt_path="$output_dir/$ALT_NAME"
     regions_path="$output_dir/$REGIONS_NAME"
+    source_readme_path="$output_dir/$SOURCE_README_NAME"
 
-    download_locked_md5 "$FASTA_URL" "$fasta_path" "$FASTA_SIZE" "$FASTA_MD5"
-    download_locked_md5 "$ALT_URL" "$alt_source_path" "$ALT_SIZE" "$ALT_MD5"
+    download_locked_sha256 "$FASTA_URL" "$fasta_path" "$FASTA_SIZE" "$FASTA_SHA256"
+    download_locked_sha256 "$ALT_URL" "$alt_path" "$ALT_SIZE" "$ALT_SHA256"
+    download_locked_sha256 \
+        "$SOURCE_README_URL" "$source_readme_path" \
+        "$SOURCE_README_SIZE" "$SOURCE_README_SHA256"
     download_locked_sha256 \
         "$REGIONS_URL" "$regions_path" "$REGIONS_SIZE" "$REGIONS_SHA256"
-
     write_download_provenance "$output_dir"
 
     if [[ ! -s "$output_dir/${FASTA_NAME}.fai" ]]; then
@@ -317,30 +327,32 @@ main() {
         run_alignment_container "$output_dir" \
             samtools faidx -o "/reference/.${FASTA_NAME}.fai.tmp" \
             "/reference/$FASTA_NAME"
-        mv -- "$output_dir/.${FASTA_NAME}.fai.tmp" "$output_dir/${FASTA_NAME}.fai"
+        mv -- "$output_dir/.${FASTA_NAME}.fai.tmp" \
+            "$output_dir/${FASTA_NAME}.fai"
     else
         printf 'REUSE: Samtools FASTA index\n'
     fi
+    validate_locked_fasta "$fasta_path" "$output_dir/${FASTA_NAME}.fai"
 
-    if [[ ! -s "$output_dir/Homo_sapiens_assembly38.dict" ]]; then
+    if [[ ! -s "$output_dir/$DICTIONARY_NAME" ]]; then
         printf 'INDEX: Picard sequence dictionary\n'
         run_alignment_container "$output_dir" \
             picard CreateSequenceDictionary \
             "R=/reference/$FASTA_NAME" \
-            'O=/reference/.Homo_sapiens_assembly38.dict.tmp'
-        mv -- "$output_dir/.Homo_sapiens_assembly38.dict.tmp" \
-            "$output_dir/Homo_sapiens_assembly38.dict"
+            "O=/reference/.${DICTIONARY_NAME}.tmp"
+        mv -- "$output_dir/.${DICTIONARY_NAME}.tmp" \
+            "$output_dir/$DICTIONARY_NAME"
     else
         printf 'REUSE: Picard sequence dictionary\n'
     fi
 
-    write_par_intervals "$regions_path" "$output_dir/GRCh38_PAR.bed"
+    write_par_intervals "$output_dir/$PAR_NAME"
 
     printf 'INDEX: BWA-MEM2\n'
     require_bwa_index_memory
     bwa_temporary="$output_dir/.bwa-mem2.tmp.$$"
     mkdir -p -- "$bwa_temporary"
-    cp -- "$alt_source_path" "$bwa_temporary/$ALT_NAME"
+    cp -- "$alt_path" "$bwa_temporary/$ALT_NAME"
     run_alignment_container "$output_dir" \
         bwa-mem2 index \
         -p "/reference/${bwa_temporary##"$output_dir/"}/${FASTA_NAME}" \
@@ -348,11 +360,9 @@ main() {
     [[ ! -e "$output_dir/bwa-mem2" ]] ||
         die "refusing to replace existing incomplete BWA-MEM2 index directory"
     mv -- "$bwa_temporary" "$output_dir/bwa-mem2"
-    rm -f -- "$alt_source_path"
 
     write_metadata "$output_dir"
     find "$output_dir" -type f -exec chmod a-w -- {} +
-
     verify_complete_bundle "$output_dir" ||
         die 'final reference checksum verification failed'
     printf 'REFERENCE READY: %s\n' "$output_dir"

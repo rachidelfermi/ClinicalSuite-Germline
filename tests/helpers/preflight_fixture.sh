@@ -79,6 +79,8 @@ preflight_fixture_create() {
     local assay="${2:-WGS}"
     local reference_manifest database_manifest fasta_checksum image
     local capture_value='NA'
+    local reference_name='GRCh38_full_analysis_set_plus_decoy_hla.fa'
+    local reference_version='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
 
     mkdir -p "$root"/{runs,references,databases,containers,profiles,scratch,data,intervals}
     mkdir -p "$root/references"/{bwa,models/wgs,models/wes}
@@ -89,11 +91,13 @@ preflight_fixture_create() {
     printf 'chr1\t0\t4\n' >"$root/intervals/reportable.bed"
     printf 'chr1\t0\t4\n' >"$root/intervals/capture.bed"
 
-    printf '>chr1\nACGT\n' >"$root/references/GRCh38.fa"
-    printf 'chr1\t4\t6\t4\t5\n' >"$root/references/GRCh38.fa.fai"
-    printf '@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:4\n' >"$root/references/GRCh38.dict"
+    printf '>chr1\nACGT\n' >"$root/references/$reference_name"
+    printf 'chr1\t4\t6\t4\t5\n' >"$root/references/${reference_name}.fai"
+    printf '@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:4\n' \
+        >"$root/references/GRCh38_full_analysis_set_plus_decoy_hla.dict"
     printf 'index\n' >"$root/references/bwa/index.0123"
-    printf 'chr1\t0\t4\n' >"$root/references/GRCh38_PAR.bed"
+    printf 'chr1\t0\t4\n' \
+        >"$root/references/GRCh38_full_analysis_set_plus_decoy_hla_PAR.bed"
     printf 'known\n' >"$root/references/known_indels.vcf.gz"
     printf 'index\n' >"$root/references/known_indels.vcf.gz.tbi"
     printf 'mills\n' >"$root/references/mills.vcf.gz"
@@ -104,14 +108,17 @@ preflight_fixture_create() {
     reference_manifest="$root/references/reference_manifest.tsv"
     printf 'resource_id\tpath\tkind\trequirement\tassembly\tversion\tsha256\n' >"$reference_manifest"
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
-        GRCH38_FASTA GRCh38.fa test-v1
+        GRCH38_FASTA "$reference_name" "$reference_version"
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
-        GRCH38_FASTA_FAI GRCh38.fa.fai test-v1
+        GRCH38_FASTA_FAI "${reference_name}.fai" "$reference_version"
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
-        GRCH38_SEQUENCE_DICTIONARY GRCh38.dict test-v1
-    printf 'BWA_MEM2_INDEX\tbwa\tDIRECTORY\tMANDATORY\tGRCh38\ttest-v1\t-\n' >>"$reference_manifest"
+        GRCH38_SEQUENCE_DICTIONARY \
+        GRCh38_full_analysis_set_plus_decoy_hla.dict "$reference_version"
+    printf 'BWA_MEM2_INDEX\tbwa\tDIRECTORY\tMANDATORY\tGRCh38\t%s\t-\n' \
+        "$reference_version" >>"$reference_manifest"
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
-        GRCH38_PAR_INTERVALS GRCh38_PAR.bed test-v1
+        GRCH38_PAR_INTERVALS \
+        GRCh38_full_analysis_set_plus_decoy_hla_PAR.bed "$reference_version"
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
         KNOWN_INDELS known_indels.vcf.gz test-v1
     preflight_fixture_add_reference_file "$reference_manifest" "$root/references" \
@@ -124,7 +131,9 @@ preflight_fixture_create() {
         >>"$reference_manifest"
     printf 'DEEPVARIANT_MODEL_WES\tmodels/wes\tDIRECTORY\tMANDATORY\tGRCh38\t1.10.0\t-\n' \
         >>"$reference_manifest"
-    fasta_checksum="$(preflight_fixture_checksum "$root/references/GRCh38.fa")"
+    fasta_checksum="$(
+        preflight_fixture_checksum "$root/references/$reference_name"
+    )"
 
     printf 'clinvar\n' >"$root/databases/clinvar.vcf.gz"
     printf 'index\n' >"$root/databases/clinvar.vcf.gz.tbi"

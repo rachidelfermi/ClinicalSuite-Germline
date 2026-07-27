@@ -1,42 +1,57 @@
-# GRCh38 reference preparation status
+# Locked reference preparation status
 
-Reference preparation began on 2026-07-24 using the locked Broad GATK hg38/v0
-`Homo_sapiens_assembly38.fasta` analysis set (GRCh38,
-`GCA_000001405.15`). No annotation database, known-sites VCF, truth set, or
-trained model was downloaded.
+On 2026-07-27, ClinicalSuite V2 locked Broad GRCh38 Full Analysis Set + Decoy +
+HLA as its sole reference. The official 1000 Genomes distribution was used.
+No annotation database, known-sites VCF, truth set, or trained model was
+downloaded.
 
-## Verified artifacts
+## Verified source artifacts
 
-| Artifact | State | SHA-256 |
-|---|---|---|
-| `Homo_sapiens_assembly38.fasta` | downloaded and source-MD5 verified | `93157a161863464c9435062fd67c173fdaf99cb8b32f1455018361387ffa5564` |
-| `Homo_sapiens_assembly38.fasta.fai` | generated with Samtools 1.24 | recorded locally |
-| `Homo_sapiens_assembly38.dict` | generated with Picard 3.4.0 | recorded locally |
-| `Homo_sapiens_assembly38.fasta.64.alt` | downloaded and source-MD5 verified | `d9254da07b8030e26129dc29d9d02b9c30a360b233a367ce041691c00407d510` |
-| `GCA_000001405.15_GRCh38_assembly_regions.txt` | downloaded and SHA-256 verified | `6b91d2c7961a322936db8fd09b7fb4a9143a590882f28c0a628a4ef26897f6c7` |
-| `GRCh38_PAR.bed` | derived; four 0-based half-open X/Y PAR rows | recorded locally |
+| Artifact | Bytes | SHA-256 |
+|---|---:|---|
+| `GRCh38_full_analysis_set_plus_decoy_hla.fa` | 3,263,683,042 | `3b103f4742abfd54938fb0333e19ad067635c8eb86f1dbf0ce44b165c4292b50` |
+| `GRCh38_full_analysis_set_plus_decoy_hla.fa.alt` | 487,553 | `d9254da07b8030e26129dc29d9d02b9c30a360b233a367ce041691c00407d510` |
+| `README.20150309.GRCh38_full_analysis_set_plus_decoy_hla` | 1,973 | `f8662c7ff1b9abdf986eca668559d38a509d4b65cc553b0fa2ee64fe3d217ea1` |
+| `20150713_location_of_centromeres_and_other_regions.txt` | 1,300 | `998b492d65a60cc557735d90c9215bf934289f8040e4583bd4df8aa4c073c881` |
 
-The FASTA, `.fai`, and dictionary each contain 3,366 contigs. Exact immutable
-source URLs, object generations, source digests, sizes, and local SHA-256
-digests are in the ignored deployment artifact
-`references/GRCh38/source_downloads.tsv`.
+The FASTA contains 3,366 sequences and the expected `chr`, decoy, and HLA contig
+classes. The source URL, locked size, source digest, and local digest are written
+to the ignored deployment artifact `references/GRCh38/source_downloads.tsv`.
 
-## Open blocker
+## Derived artifacts
 
-The BWA-MEM2 2.3 index is not complete. The first local build was killed with
-exit 137 after the host exhausted its 15 GiB RAM and 2 GiB swap. BWA-MEM2's
-documented construction estimate is about 28 times the reference size; the
-preparer now requires at least 96 GB physical RAM before starting the build.
-All downloads, the failed build cache, and completed indexes were preserved.
+The preparer generates the exact-name Samtools FAI, Picard dictionary,
+pseudoautosomal BED, and BWA-MEM2 index. The FAI and dictionary must each contain
+the same 3,366 sequences as the FASTA. The PAR file contains the GRCh38 PAR1 and
+PAR2 intervals for both X and Y in 0-based, half-open coordinates.
 
-Consequently, `reference_manifest.tsv`, the final `checksums.sha256`, and the
-reference `.complete` marker have intentionally not been issued. Reference
-preparation must be resumed on a host meeting the memory gate before Module 7
-can be implemented or validated.
+| Derived artifact | SHA-256 |
+|---|---|
+| `GRCh38_full_analysis_set_plus_decoy_hla.fa.fai` | `f361f004bdae5ca68d632458b01a3848d02834ac7176f378e177344d148a6a6d` |
+| `GRCh38_full_analysis_set_plus_decoy_hla.dict` | `222dd182767fba8fd9a94c39f79a6083b28cd555fd18c59ba4442fe9b045a7bb` |
+| `GRCh38_full_analysis_set_plus_decoy_hla_PAR.bed` | `458b432da788109bd72cfb647ec3f61ffc067dc729af75153fb483012f2711a6` |
 
-## Validation
+## Current host limitation
 
-`references/prepare_grch38.sh` passes `bash -n` and ShellCheck 0.10.0. A rerun
-verified and reused the existing downloads, `.fai`, and dictionary, regenerated
-the deterministic PAR file, then failed early at the memory gate without
-starting another index process.
+The BWA-MEM2 2.3 index is not complete on this development host. Its 15 GiB RAM
+is below the preparer's 96 GB physical-memory gate. Verified source artifacts
+and any completed lightweight indexes are preserved. The final
+`reference_manifest.tsv`, `checksums.sha256`, and `.complete` marker are
+intentionally withheld until indexing completes on a suitable build host.
+
+This is a deployment-capacity limitation, not permission to use another
+reference. Rerunning `references/prepare_grch38.sh` on a suitable host reuses all
+verified artifacts and continues from the latest completed step.
+
+## Validation contract
+
+The preparer must pass Bash syntax, ShellCheck, locked-source verification,
+contig-class/count checks, and deterministic rerun checks. Preflight additionally
+rejects any other FASTA basename or reference identity from Module 7 onward.
+
+Validation on 2026-07-27 passed Bash syntax, ShellCheck 0.10.0, source size and
+SHA-256 checks, FAI/dictionary count checks, preflight unit/integration/real-SIF
+smoke tests, configuration unit/smoke tests, and `git diff --check`. The
+unsupported-basename and unsupported-version preflight fixtures both failed with
+exit 69 as designed. A reference-preparer rerun reused the FAI and dictionary,
+then stopped at the memory gate with exit 1 and no completion marker.

@@ -4,5 +4,5 @@ path	yes	absolute or relative to REFERENCE_DIR; no URI, tilde, or parent travers
 kind	yes	FILE or DIRECTORY
 requirement	yes	MANDATORY or OPTIONAL
 assembly	yes	GRCh38
-version	yes	pinned value; latest forbidden
+version	yes	GRCh38_full_analysis_set_plus_decoy_hla-20150309 for FASTA, FAI, dictionary, BWA-MEM2 index, and PAR intervals; latest forbidden
 sha256	yes	SHA-256 for files; - permitted for directories

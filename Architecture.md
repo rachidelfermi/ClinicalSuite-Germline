@@ -59,7 +59,8 @@ The first release supports only:
 - human nuclear germline SNVs and small indels;
 - paired-end short-read WGS and hybrid-capture WES;
 - Illumina and GeneMind instruments that emit Sanger/Phred+33 paired FASTQ;
-- GRCh38, with a single laboratory-controlled reference bundle; and
+- Broad GRCh38 Full Analysis Set + Decoy + HLA as the single locked reference;
+  and
 - one sample per analysis. Family-aware interpretation may consume supplied
   pedigree evidence later, but family joint calling is not part of this release.
 
@@ -109,17 +110,20 @@ The implementation rules are:
 
 ### 3.1 Reference assembly
 
-GRCh38 is the only supported assembly. The exact FASTA sequence, contig set,
-decoys, PAR coordinates, indexes, interval files, and all annotation resources
-form one indivisible reference bundle identified by SHA-256 checksums. Mixing
-`chr1` and `1` naming, different GRCh38 patches, or unmatched FASTA/VCF resources
-is a hard error. Liftover is not performed in the clinical path because it can
-introduce ambiguous or failed mappings.
+ClinicalSuite V2 supports exactly one reference: Broad GRCh38 Full Analysis Set
++ Decoy + HLA, distributed as
+`GRCh38_full_analysis_set_plus_decoy_hla.fa`. Its locked ClinicalSuite identity
+is `GRCh38_full_analysis_set_plus_decoy_hla-20150309`. The FASTA has `chr`
+contig naming and includes primary chromosomes, unlocalized and unplaced
+scaffolds, alternate loci, patches, decoys, and HLA sequences.
 
-The laboratory chooses and validates one GRCh38 analysis set before release.
-ClinicalSuite will not silently choose between `GRCh38_no_alt`, hs38DH, and Broad
-resource-bundle layouts. This is a deployment decision because the contig set can
-change alignment and difficult-region performance.
+The FASTA sequence, contig set, ALT metadata, PAR coordinates, and generated
+indexes form one indivisible reference release identified by SHA-256 checksums.
+Any other FASTA filename, reference identity, contig convention, or unmatched
+FASTA/index/database combination is a hard preflight error from alignment
+onward. Liftover is not performed in the clinical path because it can introduce
+ambiguous or failed mappings. Annotation databases remain external and must
+declare the exact compatible FASTA SHA-256 when their stage is enabled.
 
 ### 3.2 FASTQ quality control and preprocessing
 

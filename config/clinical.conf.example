@@ -2,6 +2,7 @@
 # Copy to clinical.conf and replace every site-specific path.
 RUN_ID=example-run-001
 RUN_ROOT=/srv/clinicalsuite/runs
+# Must contain the locked GRCh38_full_analysis_set_plus_decoy_hla reference manifest.
 REFERENCE_DIR=/srv/clinicalsuite/references
 DATABASE_DIR=/srv/clinicalsuite/databases
 CONTAINER_DIR=/srv/clinicalsuite/containers

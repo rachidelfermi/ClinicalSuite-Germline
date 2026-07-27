@@ -94,6 +94,30 @@ bash tests/smoke/test_preflight.sh
 
 Fixtures cover missing FASTQs, current and future containers, stage-deferred
 annotation and ACMG databases, unreadable inputs, invalid permissions, malformed
-configuration, incompatible references, aggregated failures, and success. The
-smoke test uses real Module 4 SIFs and synthetic WES resources without
-performing scientific analysis.
+configuration, incompatible references, unsupported reference identities,
+aggregated failures, and success. The smoke test uses real Module 4 SIFs and
+synthetic WES resources named and versioned for the locked Broad GRCh38 Full
+Analysis Set + Decoy + HLA contract without performing scientific analysis.
+
+## Reference preparation
+
+The ClinicalSuite V2 reference gate is:
+
+```bash
+bash -n references/prepare_grch38.sh
+shellcheck references/prepare_grch38.sh
+./references/prepare_grch38.sh
+```
+
+The preparer verifies the official
+`GRCh38_full_analysis_set_plus_decoy_hla.fa` byte size and SHA-256 before
+indexing. The FAI and dictionary must both contain 3,366 sequences and the FAI
+must include primary `chr`, decoy, and HLA contig classes. A rerun must reuse
+verified sources and completed derived files. The final manifest and completion
+marker are forbidden until the BWA-MEM2 index succeeds and the complete bundle
+checksum inventory verifies.
+
+From Module 7 onward, preflight must reject any other FASTA basename or a core
+reference-manifest version other than
+`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. Annotation databases remain
+external and are not part of this validation gate.

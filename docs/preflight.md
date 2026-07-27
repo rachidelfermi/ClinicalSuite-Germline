@@ -33,7 +33,11 @@ Preflight reads `REFERENCE_DIR/reference_manifest.tsv` and
 `DATABASE_DIR/database_manifest.tsv`. Exact columns are defined in
 `config/schemas/`. Paths may be absolute or relative to their resource root.
 Files carry SHA-256 values; directories use `-`. Versions are pinned and genomic
-resources declare `GRCh38`.
+resources declare `GRCh38`. From Module 7 onward, `GRCH38_FASTA` must resolve to
+`GRCh38_full_analysis_set_plus_decoy_hla.fa`; that FASTA, its FAI, dictionary,
+BWA-MEM2 index, and PAR intervals must use version
+`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. This locks Broad GRCh38 Full
+Analysis Set + Decoy + HLA as the only V2 alignment and calling reference.
 
 From alignment onward, mandatory reference IDs are `GRCH38_FASTA`, `GRCH38_FASTA_FAI`,
 `GRCH38_SEQUENCE_DICTIONARY`, `BWA_MEM2_INDEX`, `GRCH38_PAR_INTERVALS`,
@@ -54,7 +58,8 @@ SHA-256.
 
 Checks cover Module 2 inputs and resolved identity, Bash/utilities, Apptainer,
 permissions, FASTQ structure/pair names, intervals, SIF checksums and executable
-versions, external-resource checksums, GRCh38 compatibility, and disk space.
+versions, external-resource checksums, exact locked-reference compatibility, and
+disk space.
 Container executable/version expectations come directly from
 `containers/lib.sh`, the same matrix used by Module 4 release validation.
 `MIN_RUN_FREE_GB`, `MIN_SCRATCH_FREE_GB`, and `DISK_SPACE_POLICY` control the

@@ -53,8 +53,11 @@ test_fastq_pair_keys() {
 }
 
 test_resource_path_safety() {
-    preflight_resolve_resource_path /reference bundle/GRCh38.fa
-    [[ "$PREFLIGHT_RESULT" == /reference/bundle/GRCh38.fa ]] || fail 'relative resource path failed'
+    preflight_resolve_resource_path \
+        /reference bundle/GRCh38_full_analysis_set_plus_decoy_hla.fa
+    [[ "$PREFLIGHT_RESULT" == \
+        /reference/bundle/GRCh38_full_analysis_set_plus_decoy_hla.fa ]] ||
+        fail 'relative resource path failed'
     assert_fails preflight_resolve_resource_path /reference ../escape
     assert_fails preflight_resolve_resource_path /reference https://example.invalid/data
 }

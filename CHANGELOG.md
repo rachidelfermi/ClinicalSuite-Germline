@@ -30,9 +30,9 @@ require signed validation and change-control records.
 - `run.sh` preflight-first execution and a safe `--preflight-only` mode.
 - Source-safe container validation matrix shared by Module 4 release checks and
   Module 5 preflight.
-- Reproducible Broad GATK hg38/v0 FASTA preparation with locked source
-  provenance, Samtools/Picard indexes, PAR derivation, and an explicit
-  BWA-MEM2 high-memory build gate.
+- Reproducible Broad GRCh38 Full Analysis Set + Decoy + HLA preparation with
+  locked official source provenance, Samtools/Picard indexes, ALT metadata, PAR
+  derivation, and an explicit BWA-MEM2 high-memory build gate.
 - Module 6 paired-end quality-control orchestration with raw FastQC,
   non-modifying fastp reporting, MultiQC aggregation, assay-profile policy
   evaluation, immutable provenance, integrity checks, and resumable checkpoints.

@@ -27,13 +27,20 @@ Relative configuration paths resolve against the directory containing
 `clinical.conf`. Relative manifest paths resolve against the directory containing
 `samples.tsv`. Resolved copies contain absolute paths.
 
+`REFERENCE_DIR/reference_manifest.tsv` must declare the only supported V2
+reference: `GRCh38_full_analysis_set_plus_decoy_hla.fa`, version
+`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. `REFERENCE_BUILD=GRCh38`
+does not select among bundles; it names the assembly of this single locked
+reference. From alignment onward, preflight rejects any other FASTA basename or
+reference version.
+
 ## Supported configuration keys
 
 | Key | Required | Default | Rule |
 |---|---:|---|---|
 | `RUN_ID` | yes | — | safe identifier |
 | `RUN_ROOT` | yes | — | existing writable directory |
-| `REFERENCE_DIR` | yes | — | existing readable directory |
+| `REFERENCE_DIR` | yes | — | existing readable directory containing the locked Broad GRCh38 Full Analysis Set + Decoy + HLA manifest |
 | `DATABASE_DIR` | yes | — | existing readable directory |
 | `CONTAINER_DIR` | yes | — | existing readable directory |
 | `ASSAY_PROFILE_DIR` | yes | — | existing readable directory |

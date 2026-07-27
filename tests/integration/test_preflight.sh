@@ -123,7 +123,10 @@ test_acmg_stage_boundary() {
     local fasta_checksum
 
     preflight_fixture_create "$root_before" WGS
-    fasta_checksum="$(preflight_fixture_checksum "$root_before/references/GRCh38.fa")"
+    fasta_checksum="$(
+        preflight_fixture_checksum \
+            "$root_before/references/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+    )"
     printf 'ACMG_RULES\tacmg-rules\tDIRECTORY\tMANDATORY\tGRCh38\ttest-v1\t-\t%s\n' \
         "$fasta_checksum" >>"$root_before/databases/database_manifest.tsv"
     "$PREFLIGHT" --config "$root_before/clinical.conf" \
@@ -134,7 +137,10 @@ test_acmg_stage_boundary() {
         fail 'ACMG resource was not deferred before Module 15'
 
     preflight_fixture_create "$root_at" WGS
-    fasta_checksum="$(preflight_fixture_checksum "$root_at/references/GRCh38.fa")"
+    fasta_checksum="$(
+        preflight_fixture_checksum \
+            "$root_at/references/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+    )"
     printf 'ACMG_RULES\tacmg-rules\tDIRECTORY\tMANDATORY\tGRCh38\ttest-v1\t-\t%s\n' \
         "$fasta_checksum" >>"$root_at/databases/database_manifest.tsv"
     run_failure_case "$root_at" \
@@ -171,8 +177,33 @@ test_incompatible_reference() {
     local root="$TEST_ROOT/incompatible-reference"
 
     preflight_fixture_create "$root" WGS
-    printf '>chr2\nACGT\n' >"$root/references/GRCh38.fa"
+    printf '>chr2\nACGT\n' \
+        >"$root/references/GRCh38_full_analysis_set_plus_decoy_hla.fa"
     run_failure_case "$root" 'Reference indexes are inconsistent|Checksum mismatch: GRCH38_FASTA'
+}
+
+test_unsupported_reference_identity() {
+    local root="$TEST_ROOT/unsupported-reference"
+
+    preflight_fixture_create "$root" WGS
+    sed -i \
+        's/GRCh38_full_analysis_set_plus_decoy_hla-20150309/unsupported-reference/g' \
+        "$root/references/reference_manifest.tsv"
+    run_failure_case "$root" \
+        'Unsupported reference version for GRCH38_FASTA: unsupported-reference'
+}
+
+test_unsupported_reference_basename() {
+    local root="$TEST_ROOT/unsupported-reference-basename"
+
+    preflight_fixture_create "$root" WGS
+    mv "$root/references/GRCh38_full_analysis_set_plus_decoy_hla.fa" \
+        "$root/references/unsupported-reference.fa"
+    sed -i \
+        's/GRCh38_full_analysis_set_plus_decoy_hla\.fa\t/unsupported-reference.fa\t/' \
+        "$root/references/reference_manifest.tsv"
+    run_failure_case "$root" \
+        'Unsupported GRCh38 FASTA: unsupported-reference.fa'
 }
 
 test_aggregated_failures() {
@@ -208,6 +239,8 @@ main() {
     test_invalid_permissions
     test_malformed_configuration
     test_incompatible_reference
+    test_unsupported_reference_identity
+    test_unsupported_reference_basename
     test_aggregated_failures
     printf 'PASS: preflight integration tests\n'
 }

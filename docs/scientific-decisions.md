@@ -44,3 +44,20 @@ are informational through Module 14 and enforced from Module 15.
 This changes validation timing only. It does not weaken checksum, assembly,
 version, or compatibility checks once a resource enters scope, and it does not
 change any scientific workflow.
+
+## SDR-004: ClinicalSuite V2 reference lock
+
+**Status:** approved implementation directive, 2026-07-27
+
+Broad GRCh38 Full Analysis Set + Decoy + HLA is the only supported V2 reference.
+The exact FASTA basename is `GRCh38_full_analysis_set_plus_decoy_hla.fa`; the
+ClinicalSuite reference identity is
+`GRCh38_full_analysis_set_plus_decoy_hla-20150309`, and the locked FASTA
+SHA-256 is
+`3b103f4742abfd54938fb0333e19ad067635c8eb86f1dbf0ce44b165c4292b50`.
+
+Alignment, variant calling, consensus, filtering, and their validation inputs
+must use indexes and intervals derived from this exact FASTA. Preflight rejects
+another FASTA basename or reference identity from Module 7 onward. Annotation
+and interpretation databases remain external and are not acquired by reference
+preparation.

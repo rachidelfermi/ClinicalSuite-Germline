@@ -15,6 +15,8 @@ source "$PREFLIGHT_REPOSITORY_ROOT/containers/lib.sh"
 readonly PREFLIGHT_EX_USAGE=64
 readonly PREFLIGHT_EX_UNAVAILABLE=69
 readonly PREFLIGHT_DEFAULT_STAGE='VARIANT_FILTERING'
+readonly PREFLIGHT_LOCKED_REFERENCE_BASENAME='GRCh38_full_analysis_set_plus_decoy_hla.fa'
+readonly PREFLIGHT_LOCKED_REFERENCE_VERSION='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
 readonly -a PREFLIGHT_IMAGES=("${CLINICAL_CONTAINER_IMAGES[@]}")
 readonly -a PREFLIGHT_REFERENCE_IDS=(
     GRCH38_FASTA
@@ -50,6 +52,7 @@ declare -gA PREFLIGHT_RESOURCE_PATH=()
 declare -gA PREFLIGHT_RESOURCE_KIND=()
 declare -gA PREFLIGHT_RESOURCE_REQUIREMENT=()
 declare -gA PREFLIGHT_RESOURCE_ASSEMBLY=()
+declare -gA PREFLIGHT_RESOURCE_VERSION=()
 declare -gA PREFLIGHT_RESOURCE_SHA256=()
 declare -gA PREFLIGHT_RESOURCE_REFERENCE_SHA256=()
 declare -ga PREFLIGHT_REFERENCE_DECLARED_IDS=()
@@ -71,6 +74,7 @@ preflight_reset() {
     PREFLIGHT_RESOURCE_KIND=()
     PREFLIGHT_RESOURCE_REQUIREMENT=()
     PREFLIGHT_RESOURCE_ASSEMBLY=()
+    PREFLIGHT_RESOURCE_VERSION=()
     PREFLIGHT_RESOURCE_SHA256=()
     PREFLIGHT_RESOURCE_REFERENCE_SHA256=()
     PREFLIGHT_REFERENCE_DECLARED_IDS=()
@@ -619,6 +623,7 @@ preflight_parse_resource_manifest() {
         PREFLIGHT_RESOURCE_KIND["$key"]="$kind"
         PREFLIGHT_RESOURCE_REQUIREMENT["$key"]="$requirement"
         PREFLIGHT_RESOURCE_ASSEMBLY["$key"]="$assembly"
+        PREFLIGHT_RESOURCE_VERSION["$key"]="$version"
         PREFLIGHT_RESOURCE_SHA256["$key"]="$checksum"
         PREFLIGHT_RESOURCE_REFERENCE_SHA256["$key"]="$reference_checksum"
         if [[ "$scope" == reference ]]; then
@@ -736,7 +741,7 @@ preflight_required_assays() {
 
 preflight_check_reference_consistency() {
     local fasta_key fai_key dict_key fasta fai dictionary fasta_contig fai_contig dict_contig
-    local requirement
+    local requirement id key declared_version
 
     fasta_key="$(preflight_resource_key reference GRCH38_FASTA)"
     fai_key="$(preflight_resource_key reference GRCH38_FASTA_FAI)"
@@ -747,6 +752,22 @@ preflight_check_reference_consistency() {
     fasta="${PREFLIGHT_RESOURCE_PATH[$fasta_key]}"
     fai="${PREFLIGHT_RESOURCE_PATH[$fai_key]}"
     dictionary="${PREFLIGHT_RESOURCE_PATH[$dict_key]}"
+    preflight_stage_requirement 7 MANDATORY
+    requirement="$PREFLIGHT_RESULT"
+    if [[ "${fasta##*/}" != "$PREFLIGHT_LOCKED_REFERENCE_BASENAME" ]]; then
+        preflight_requirement_issue "$requirement" compatibility \
+            "Unsupported GRCh38 FASTA: ${fasta##*/} (required: $PREFLIGHT_LOCKED_REFERENCE_BASENAME)"
+    fi
+    for id in GRCH38_FASTA GRCH38_FASTA_FAI GRCH38_SEQUENCE_DICTIONARY \
+        BWA_MEM2_INDEX GRCH38_PAR_INTERVALS; do
+        key="$(preflight_resource_key reference "$id")"
+        [[ -v "PREFLIGHT_RESOURCE_VERSION[$key]" ]] || continue
+        declared_version="${PREFLIGHT_RESOURCE_VERSION[$key]}"
+        if [[ "$declared_version" != "$PREFLIGHT_LOCKED_REFERENCE_VERSION" ]]; then
+            preflight_requirement_issue "$requirement" compatibility \
+                "Unsupported reference version for $id: $declared_version (required: $PREFLIGHT_LOCKED_REFERENCE_VERSION)"
+        fi
+    done
     [[ -r "$fasta" && -r "$fai" && -r "$dictionary" ]] || return
     IFS= read -r fasta_contig <"$fasta" || fasta_contig=''
     fasta_contig="${fasta_contig#>}"
@@ -759,8 +780,6 @@ preflight_check_reference_consistency() {
         [[ "$fasta_contig" == chr* ]] && PREFLIGHT_REFERENCE_CONTIG_STYLE=chr ||
             PREFLIGHT_REFERENCE_CONTIG_STYLE=nochr
     else
-        preflight_stage_requirement 7 MANDATORY
-        requirement="$PREFLIGHT_RESULT"
         preflight_requirement_issue "$requirement" compatibility \
             "Reference indexes are inconsistent (FASTA=$fasta_contig FAI=$fai_contig dictionary=$dict_contig)"
     fi
