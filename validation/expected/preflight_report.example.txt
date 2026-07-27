@@ -1,22 +1,28 @@
 ClinicalSuite V2 preflight report
-Generated (UTC): 2026-07-23T00:00:00Z
+Generated (UTC): 2026-07-27T00:00:00Z
+Execution stage: Module 13 (VARIANT_FILTERING)
 Status: FAIL
-Errors: 3
-Warnings: 1
+Errors: 2
+Warnings: 0
+Information: 2
 
 Errors
 ------
-1. Mandatory resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38.fa)
-2. Mandatory resource missing or unreadable: CLINVAR (/database/clinvar.vcf.gz)
-3. Missing container: /containers/deepvariant.sif
+1. MANDATORY resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38.fa)
+2. Missing MANDATORY container: /containers/deepvariant.sif
 
 Warnings
 --------
-1. Optional resource not declared: REVEL
+None
+
+Information
+-----------
+1. FUTURE resource missing or unreadable: CLINVAR (/database/clinvar.vcf.gz; first required Module 14)
+2. FUTURE resource not declared: REVEL (first required Module 15)
 
 Checks
 ------
-[FAIL] resources: Mandatory resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38.fa)
-[FAIL] resources: Mandatory resource missing or unreadable: CLINVAR (/database/clinvar.vcf.gz)
-[FAIL] containers: Missing container: /containers/deepvariant.sif
-[WARN] resources: Optional resource not declared: REVEL
+[FAIL] resources: MANDATORY resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38.fa)
+[FAIL] containers: Missing MANDATORY container: /containers/deepvariant.sif
+[INFO] resources: FUTURE resource missing or unreadable: CLINVAR (/database/clinvar.vcf.gz; first required Module 14)
+[INFO] resources: FUTURE resource not declared: REVEL (first required Module 15)

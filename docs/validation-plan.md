@@ -31,7 +31,7 @@ bash tests/smoke/test_repository_skeleton.sh
 ```
 
 The tests confirm required paths, executable state, successful help, rejected
-invalid arguments, and the clear non-operational exit used before preflight
+invalid arguments, and the clear missing-input exit used before preflight
 exists. Python compilation is not applicable because this module contains no
 Python source.
 
@@ -92,7 +92,8 @@ bash tests/integration/test_preflight.sh
 bash tests/smoke/test_preflight.sh
 ```
 
-Fixtures cover missing FASTQs, containers, databases, unreadable inputs, invalid
-permissions, malformed configuration, incompatible references, aggregated
-failures, and success. The smoke test uses real Module 4 SIFs and synthetic WES
-resources without performing scientific analysis.
+Fixtures cover missing FASTQs, current and future containers, stage-deferred
+annotation and ACMG databases, unreadable inputs, invalid permissions, malformed
+configuration, incompatible references, aggregated failures, and success. The
+smoke test uses real Module 4 SIFs and synthetic WES resources without
+performing scientific analysis.

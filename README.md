@@ -6,8 +6,9 @@ sequencing (WGS) and whole-exome sequencing (WES).
 
 The V2 implementation is being developed as a sequence of independently tested
 modules. The repository currently provides the validated configuration,
-shared-runtime, Apptainer-container, and preflight foundations. Scientific
-analysis modules are not yet operational.
+shared-runtime, Apptainer-container, preflight, and paired-end FASTQ
+quality-control modules. Alignment and later analysis modules are not yet
+operational.
 
 > [!CAUTION]
 > ClinicalSuite V2 is development software. It is not a validated clinical
@@ -28,6 +29,7 @@ Current version: **2.0.0-dev**
 - [Configuration](#configuration)
 - [Preflight validation](#preflight-validation)
 - [Container system](#container-system)
+- [Quality control](#quality-control)
 - [External references and databases](#external-references-and-databases)
 - [Testing](#testing)
 - [HG002 QC test fixture](#hg002-qc-test-fixture)
@@ -47,14 +49,14 @@ Current version: **2.0.0-dev**
 | 3. Common Bash library | Complete | [Validation record](validation/common-bash-library.md) |
 | 4. Apptainer container system | Complete | [Container validation report](containers/container_validation_report.txt) |
 | 5. Preflight validation | Complete | [Validation record](validation/preflight.md) |
-| 6. Quality control | Pending | FastQC, fastp, and MultiQC container dependency validated |
+| 6. Quality control | Complete | [Validation record](validation/quality-control.md) |
 | 7–16. Scientific and reporting modules | Pending | Not implemented |
 | 17. Integration testing | Pending | Module-level integration tests exist; complete workflow pending |
 | 18. End-to-end validation | Pending | Not started |
 
-`run.sh` currently supports environment preflight only. It does not start
-read processing, alignment, variant calling, annotation, interpretation, or
-reporting.
+`run.sh` currently executes mandatory preflight followed by Module 6 quality
+control. It stops after QC and does not start alignment, variant calling,
+annotation, interpretation, or reporting.
 
 The authoritative live status is maintained in
 [docs/implementation-status.md](docs/implementation-status.md).
@@ -299,14 +301,17 @@ Preflight performs aggregated checks for:
 - FASTQ readability, structure, pairing, and mate identifiers
 - Output and scratch permissions
 - Configurable free-space requirements
-- Presence and SHA-256 integrity of every required SIF
+- Presence and SHA-256 integrity of every SIF required through the selected stage
 - Executable availability and locked tool-version compatibility
 - GRCh38 FASTA, indexes, dictionaries, and interval files
-- Required databases, VEP cache, plugins, and trained models
+- Stage-required references, databases, caches, plugins, and trained models
 - Assembly and reference/database compatibility
 - Required checksums and external-resource manifest consistency
 
 It does not start scientific analysis and does not download missing resources.
+`bin/preflight.sh --stage STAGE` selects the validation boundary. The current
+default is `VARIANT_FILTERING` (Module 13), so annotation and ACMG resources are
+reported informationally and do not block execution.
 
 Successful or failed validation produces atomic reports:
 
@@ -367,6 +372,23 @@ Important container metadata:
 orchestration must not change its tool versions or contents unless a critical
 software defect is discovered.
 
+## Quality control
+
+After preflight succeeds, `run.sh` executes Module 6 through `bin/qc.sh`.
+For every paired-end sample, the module runs raw-read FastQC, generates a
+fastp report in explicitly non-modifying pass-through mode, and aggregates the
+reports with MultiQC. Original FASTQs remain unchanged and are exposed to the
+next module through checksummed symbolic links.
+
+QC thresholds and `BLOCK`/`REVIEW` policies come from the validated assay
+profile, not the orchestration script. A matching `.complete` signature makes
+reruns resumable; changed configuration, profile, container, or FASTQ content
+is rejected rather than silently mixed with an existing result.
+
+See [docs/quality-control.md](docs/quality-control.md) for the output contract
+and [validation/quality-control.md](validation/quality-control.md) for the
+HG002 software-validation result.
+
 ## External references and databases
 
 ClinicalSuite containers contain no reference genomes, annotation databases,
@@ -382,10 +404,11 @@ DATABASE_DIR/
 └── database_manifest.tsv
 ```
 
-Mandatory resources include the configured GRCh38 FASTA and indexes,
-reportable/capture intervals, known-indel resources, a matching DeepVariant
-model, ClinVar, dbSNP, gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP. REVEL is
-currently optional and produces a warning when absent.
+Requirements are stage-aware. Through Module 13, the configured GRCh38 FASTA
+and indexes, reportable/capture intervals, known-indel resources, caller
+containers, and matching DeepVariant model are mandatory. ClinVar, dbSNP,
+gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP become mandatory at Module 14.
+ACMG resources are deferred until Module 15; REVEL is optional at that stage.
 
 Resource rows carry an assembly declaration and checksum. Database rows also
 record the compatible FASTA SHA-256 so preflight can reject mixed reference
@@ -395,6 +418,7 @@ ClinicalSuite never infers, downloads, replaces, or updates these resources
 during a run. Consult:
 
 - [references/README.md](references/README.md)
+- [Reference preparation status](validation/reference-preparation.md)
 - [databases/README.md](databases/README.md)
 - [config/schemas/reference_manifest.schema.tsv](config/schemas/reference_manifest.schema.tsv)
 - [config/schemas/database_manifest.schema.tsv](config/schemas/database_manifest.schema.tsv)

@@ -28,6 +28,7 @@ tmp/
 
 references/*
 !references/README.md
+!references/prepare_grch38.sh
 databases/*
 !databases/README.md
 containers/*.sif

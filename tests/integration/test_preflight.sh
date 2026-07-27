@@ -22,11 +22,12 @@ fail() {
 run_failure_case() {
     local root="$1"
     local expected="$2"
+    shift 2
     local status
 
     set +e
     "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
-        --output-dir "$root/preflight-output" >/dev/null 2>&1
+        --output-dir "$root/preflight-output" "$@" >/dev/null 2>&1
     status=$?
     set -e
     [[ $status -eq 69 ]] || fail "expected preflight status 69, found $status"
@@ -63,15 +64,81 @@ test_missing_container() {
 
     preflight_fixture_create "$root" WGS
     mv "$root/containers/qc.sif" "$root/containers/qc.sif.missing"
-    run_failure_case "$root" 'Missing container:.*qc\.sif'
+    run_failure_case "$root" 'Missing MANDATORY container:.*qc\.sif'
 }
 
-test_missing_database() {
-    local root="$TEST_ROOT/missing-database"
+test_future_database_is_informational() {
+    local root="$TEST_ROOT/future-database"
 
     preflight_fixture_create "$root" WGS
     mv "$root/databases/clinvar.vcf.gz" "$root/databases/clinvar.missing"
-    run_failure_case "$root" 'Mandatory resource missing.*CLINVAR'
+    "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
+        --output-dir "$root/preflight-output" --stage VARIANT_FILTERING >/dev/null
+    jq -e '.status == "PASS" and .error_count == 0 and
+        .execution_module == 13 and .information_count > 0' \
+        "$root/preflight-output/preflight.json" >/dev/null ||
+        fail 'future database absence did not remain informational'
+    grep -Fq 'FUTURE resource missing or unreadable: CLINVAR' \
+        "$root/preflight-output/preflight_report.txt" ||
+        fail 'future database was not identified in the report'
+}
+
+test_annotation_database_is_mandatory() {
+    local root="$TEST_ROOT/annotation-database"
+
+    preflight_fixture_create "$root" WGS
+    mv "$root/databases/clinvar.vcf.gz" "$root/databases/clinvar.missing"
+    run_failure_case "$root" 'MANDATORY resource missing.*CLINVAR' \
+        --stage ANNOTATION
+}
+
+test_future_container_is_informational() {
+    local root="$TEST_ROOT/future-container"
+
+    preflight_fixture_create "$root" WGS
+    mv "$root/containers/annotation.sif" "$root/containers/annotation.sif.missing"
+    "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
+        --output-dir "$root/preflight-output" --stage VARIANT_FILTERING >/dev/null
+    grep -Fq 'Missing FUTURE container:' \
+        "$root/preflight-output/preflight_report.txt" ||
+        fail 'future container was not reported as informational'
+}
+
+test_future_database_manifest_is_informational() {
+    local root="$TEST_ROOT/future-database-manifest"
+
+    preflight_fixture_create "$root" WGS
+    mv "$root/databases/database_manifest.tsv" \
+        "$root/databases/database_manifest.tsv.future"
+    "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
+        --output-dir "$root/preflight-output" --stage VARIANT_FILTERING >/dev/null
+    grep -Fq 'Missing database manifest for Module 13 (VARIANT_FILTERING)' \
+        "$root/preflight-output/preflight_report.txt" ||
+        fail 'future database manifest absence was not informational'
+}
+
+test_acmg_stage_boundary() {
+    local root_before="$TEST_ROOT/acmg-before"
+    local root_at="$TEST_ROOT/acmg-at"
+    local fasta_checksum
+
+    preflight_fixture_create "$root_before" WGS
+    fasta_checksum="$(preflight_fixture_checksum "$root_before/references/GRCh38.fa")"
+    printf 'ACMG_RULES\tacmg-rules\tDIRECTORY\tMANDATORY\tGRCh38\ttest-v1\t-\t%s\n' \
+        "$fasta_checksum" >>"$root_before/databases/database_manifest.tsv"
+    "$PREFLIGHT" --config "$root_before/clinical.conf" \
+        --samples "$root_before/samples.tsv" \
+        --output-dir "$root_before/preflight-output" --stage ANNOTATION >/dev/null
+    grep -Fq 'FUTURE resource missing or unreadable: ACMG_RULES' \
+        "$root_before/preflight-output/preflight_report.txt" ||
+        fail 'ACMG resource was not deferred before Module 15'
+
+    preflight_fixture_create "$root_at" WGS
+    fasta_checksum="$(preflight_fixture_checksum "$root_at/references/GRCh38.fa")"
+    printf 'ACMG_RULES\tacmg-rules\tDIRECTORY\tMANDATORY\tGRCh38\ttest-v1\t-\t%s\n' \
+        "$fasta_checksum" >>"$root_at/databases/database_manifest.tsv"
+    run_failure_case "$root_at" \
+        'MANDATORY resource directory missing or empty: ACMG_RULES' --stage ACMG
 }
 
 test_unreadable_fastq() {
@@ -114,7 +181,7 @@ test_aggregated_failures() {
 
     preflight_fixture_create "$root" WGS
     mv "$root/containers/qc.sif" "$root/containers/qc.sif.missing"
-    mv "$root/databases/clinvar.vcf.gz" "$root/databases/clinvar.missing"
+    mv "$root/references/known_indels.vcf.gz" "$root/references/known_indels.missing"
     set +e
     "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
         --output-dir "$root/preflight-output" >/dev/null 2>&1
@@ -122,17 +189,21 @@ test_aggregated_failures() {
     set -e
     [[ $status -eq 69 ]] || fail "aggregate case returned $status"
     report="$(<"$root/preflight-output/preflight_report.txt")"
-    [[ "$report" == *'Missing container:'*qc.sif* ]] ||
+    [[ "$report" == *'Missing MANDATORY container:'*qc.sif* ]] ||
         fail 'aggregate report omitted missing container'
-    [[ "$report" == *'Mandatory resource missing or unreadable: CLINVAR'* ]] ||
-        fail 'aggregate report omitted missing database'
+    [[ "$report" == *'MANDATORY resource missing or unreadable: KNOWN_INDELS'* ]] ||
+        fail 'aggregate report omitted missing current-stage reference'
 }
 
 main() {
     test_success
     test_missing_fastq
     test_missing_container
-    test_missing_database
+    test_future_database_is_informational
+    test_annotation_database_is_mandatory
+    test_future_container_is_informational
+    test_future_database_manifest_is_informational
+    test_acmg_stage_boundary
     test_unreadable_fastq
     test_invalid_permissions
     test_malformed_configuration

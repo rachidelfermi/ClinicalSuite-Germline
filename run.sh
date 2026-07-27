@@ -12,6 +12,7 @@ readonly EX_UNAVAILABLE=69
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
 readonly PREFLIGHT_SCRIPT="$SCRIPT_DIR/bin/preflight.sh"
+readonly QC_SCRIPT="$SCRIPT_DIR/bin/qc.sh"
 
 ###############################################################################
 # USER INTERFACE
@@ -24,12 +25,11 @@ print_usage() {
     printf '  --preflight-only       stop successfully after preflight\n'
     printf '  --preflight-dir DIR    override preflight report directory\n'
     printf '  -h, --help             show this help\n'
-    printf '\nClinicalSuite V2 scientific modules remain under development.\n'
+    printf '\nClinicalSuite V2 currently executes through Module 6 quality control.\n'
 }
 
 print_not_available() {
-    printf 'ClinicalSuite V2 is not yet operational.\n' >&2
-    printf 'Provide --config and --samples to run preflight validation.\n' >&2
+    printf 'ClinicalSuite V2 requires validated configuration and sample inputs.\n' >&2
 }
 
 ###############################################################################
@@ -86,8 +86,13 @@ main() {
     if [[ "$preflight_only" == true ]]; then
         return 0
     fi
-    printf 'Preflight passed; no scientific workflow module is implemented yet.\n' >&2
-    return "$EX_UNAVAILABLE"
+    if "$QC_SCRIPT" --config "$config_file" --samples "$samples_file"; then
+        status=0
+    else
+        status=$?
+    fi
+    (( status == 0 )) || return "$status"
+    printf 'Quality control completed; alignment is not implemented yet.\n' >&2
 }
 
 main "$@"

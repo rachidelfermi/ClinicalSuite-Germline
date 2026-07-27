@@ -97,7 +97,7 @@ test_help() {
         fail 'run.sh --help did not expose the current preflight interface'
 }
 
-test_non_operational_exit() {
+test_missing_inputs_exit() {
     local output
     local status
 
@@ -107,8 +107,8 @@ test_non_operational_exit() {
     set -e
 
     [[ $status -eq 69 ]] || fail "run.sh returned $status instead of 69"
-    [[ "$output" == *'ClinicalSuite V2 is not yet operational.'* ]] || \
-        fail 'run.sh did not provide a clear non-operational message'
+    [[ "$output" == *'ClinicalSuite V2 requires validated configuration and sample inputs.'* ]] || \
+        fail 'run.sh did not provide a clear missing-input message'
 }
 
 ###############################################################################
@@ -119,7 +119,7 @@ main() {
     test_required_directories
     test_required_files
     test_help
-    test_non_operational_exit
+    test_missing_inputs_exit
     printf 'PASS: repository skeleton smoke test\n'
 }
 

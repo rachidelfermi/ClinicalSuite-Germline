@@ -46,8 +46,11 @@ and the reference bundle's contig convention. Licensed resources are optional
 until lawfully supplied but their absence is never concealed. AutoACMG must not
 send patient variant coordinates to public endpoints.
 
-Preflight treats ClinVar, dbSNP, gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP
-as mandatory minimum resources and REVEL as optional. Additional rows marked
-`MANDATORY` are enforced.
+Preflight treats ClinVar, dbSNP, gnomAD, VEP cache, LOFTEE, SpliceAI, and
+dbNSFP as mandatory minimum resources beginning at Module 14. Before annotation
+they are informational and cannot block variant discovery through Module 13.
+ACMG-stage resources are informational until Module 15. REVEL is optional when
+Module 15 is selected. Additional database rows default to Module 14 unless
+their identifier marks an ACMG/interpretation resource.
 
 Files placed here locally are ignored by git except for this README.

@@ -24,11 +24,15 @@ sed -i 's|^APPTAINER_BIN=.*|APPTAINER_BIN=/usr/bin/apptainer|' \
     --samples "$TEST_ROOT/fixture/samples.tsv" \
     --output-dir "$TEST_ROOT/fixture/preflight-output" >/dev/null
 
-jq -e '.status == "PASS" and .error_count == 0' \
+jq -e '.status == "PASS" and .error_count == 0 and
+    .execution_module == 13 and .execution_stage == "VARIANT_FILTERING" and
+    .information_count > 0' \
     "$TEST_ROOT/fixture/preflight-output/preflight.json" >/dev/null
 grep -Fq 'Capture intervals available' \
     "$TEST_ROOT/fixture/preflight-output/preflight_report.txt"
 grep -Fq 'DEEPVARIANT_MODEL_WES' \
+    "$TEST_ROOT/fixture/preflight-output/preflight_report.txt"
+grep -Fq 'Future resource declared and available; content validation begins at Module 14: VEP_CACHE' \
     "$TEST_ROOT/fixture/preflight-output/preflight_report.txt"
 
 printf 'PASS: preflight real-container smoke test\n'

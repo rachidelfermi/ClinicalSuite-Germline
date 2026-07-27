@@ -6,6 +6,11 @@ caller shell options and performs no work merely by being sourced.
 `bin/preflight.sh` is the first executable module. It consumes Module 2 state and
 the helpers below, validates the complete runtime, and never starts analysis.
 
+`bin/qc.sh` is Module 6. It is invoked only after successful preflight and
+orchestrates the immutable `qc.sif` dependency. It performs raw FastQC,
+non-modifying fastp reporting, MultiQC aggregation, policy evaluation,
+provenance capture, atomic publication, and checkpoint reuse.
+
 ## Public API
 
 - Initialization/logging: `common_init`, `log_info`, `log_warning`, `log_error`,

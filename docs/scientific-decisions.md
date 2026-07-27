@@ -31,3 +31,16 @@ This narrower boundary supersedes earlier architecture text that placed an
 Octopus forest or ACMG tools/plugins in these images. It does not change caller,
 normalization, annotation, or interpretation workflow design. See
 `docs/container-provenance.md` for the release and packaging review.
+
+## SDR-003: Stage-aware preflight resource gates
+
+**Status:** approved implementation directive, 2026-07-27
+
+Preflight validates only resources consumed at or before the selected execution
+stage. Annotation resources are informational through Module 13 and mandatory
+according to their manifest policy from Module 14. ACMG/interpretation resources
+are informational through Module 14 and enforced from Module 15.
+
+This changes validation timing only. It does not weaken checksum, assembly,
+version, or compatibility checks once a resource enters scope, and it does not
+change any scientific workflow.

@@ -7,7 +7,7 @@
 | 3 | Common Bash library | Complete | See `validation/common-bash-library.md` |
 | 4 | Container build system | Complete | See `containers/container_validation_report.txt` |
 | 5 | Preflight | Complete | See `validation/preflight.md` |
-| 6 | Quality control | Pending | Not started |
+| 6 | Quality control | Complete | See `validation/quality-control.md` |
 | 7 | Alignment and BAM processing | Pending | Not started |
 | 8 | Coverage analysis | Pending | Not started |
 | 9 | DeepVariant | Pending | Not started |

@@ -59,6 +59,26 @@ test_resource_path_safety() {
     assert_fails preflight_resolve_resource_path /reference https://example.invalid/data
 }
 
+test_stage_boundaries() {
+    preflight_reset
+    preflight_set_stage variant-filtering || fail 'variant-filtering stage was rejected'
+    [[ "$PREFLIGHT_STAGE_MODULE" -eq 13 &&
+        "$PREFLIGHT_STAGE_NAME" == VARIANT_FILTERING ]] ||
+        fail 'variant-filtering stage mapping is incorrect'
+    preflight_stage_requirement 14 MANDATORY
+    [[ "$PREFLIGHT_RESULT" == FUTURE ]] ||
+        fail 'Module 14 resource was not deferred at Module 13'
+    preflight_set_stage annotation || fail 'annotation stage was rejected'
+    preflight_stage_requirement 14 MANDATORY
+    [[ "$PREFLIGHT_RESULT" == MANDATORY ]] ||
+        fail 'Module 14 resource was not mandatory at annotation'
+    [[ "$(preflight_resource_first_module database REVEL)" -eq 15 ]] ||
+        fail 'REVEL was not classified as a Module 15 resource'
+    [[ "$(preflight_image_first_module gatk)" -eq 7 ]] ||
+        fail 'GATK was not classified for Module 7 BQSR'
+    assert_fails preflight_set_stage unknown-stage
+}
+
 test_disk_policy() {
     preflight_reset
     DISK_SPACE_POLICY=WARNING
@@ -77,9 +97,12 @@ test_report_writers() {
     create_directory "$PREFLIGHT_OUTPUT_DIR"
     preflight_pass unit 'report success'
     preflight_warning 'optional item missing'
+    preflight_info_check unit 'future item deferred'
     preflight_write_reports
     [[ -s "$PREFLIGHT_OUTPUT_DIR/preflight_report.txt" ]] || fail 'text report missing'
-    jq -e '.status == "PASS" and .warning_count == 1' \
+    jq -e '.schema_version == "1.1" and .status == "PASS" and
+        .warning_count == 1 and .information_count == 1 and
+        .execution_module == 13' \
         "$PREFLIGHT_OUTPUT_DIR/preflight.json" >/dev/null || fail 'JSON report is invalid'
 }
 
@@ -97,6 +120,7 @@ main() {
     test_aggregation_and_json_escape
     test_fastq_pair_keys
     test_resource_path_safety
+    test_stage_boundaries
     test_disk_policy
     test_report_writers
     test_cli_contract

@@ -30,8 +30,18 @@ require signed validation and change-control records.
 - `run.sh` preflight-first execution and a safe `--preflight-only` mode.
 - Source-safe container validation matrix shared by Module 4 release checks and
   Module 5 preflight.
+- Reproducible Broad GATK hg38/v0 FASTA preparation with locked source
+  provenance, Samtools/Picard indexes, PAR derivation, and an explicit
+  BWA-MEM2 high-memory build gate.
+- Module 6 paired-end quality-control orchestration with raw FastQC,
+  non-modifying fastp reporting, MultiQC aggregation, assay-profile policy
+  evaluation, immutable provenance, integrity checks, and resumable checkpoints.
+- Module 6 unit, real-container integration, and 50,000-pair HG002 smoke tests.
 
 ### Changed
 
 - Documented the approved V2 consensus clarification: conventional normalization,
   no GA4GH VRS implementation, and no machine-learning consensus model.
+- Made Module 5 external-resource and container validation conditional on the
+  selected execution stage. Annotation inputs are informational through Module
+  13, and ACMG inputs are informational through Module 14.

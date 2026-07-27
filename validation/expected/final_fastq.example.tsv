@@ -1,0 +1,2 @@
+sample_id	fastq_r1	fastq_r2	sha256_r1	sha256_r2	mode
+HG002	samples/HG002/final/HG002_test_R1.fastq.gz	samples/HG002/final/HG002_test_R2.fastq.gz	<sha256>	<sha256>	PASS_THROUGH

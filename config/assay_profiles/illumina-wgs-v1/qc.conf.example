@@ -1,0 +1,10 @@
+# Example development QC policy. Copy into the external approved assay-profile
+# deployment as ASSAY_PROFILE_DIR/illumina-wgs-v1/qc.conf after laboratory review.
+PROFILE_ID=illumina-wgs-v1
+PROFILE_VERSION=1.0.0
+SUPPORTED_ASSAYS=WGS
+SUPPORTED_PLATFORMS=ILLUMINA
+FASTP_MODE=PASS_THROUGH
+FASTQC_FAIL_POLICY=REVIEW
+FASTQC_WARNING_POLICY=REVIEW
+MIN_READ_PAIRS=1

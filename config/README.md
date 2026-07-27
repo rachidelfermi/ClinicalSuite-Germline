@@ -55,6 +55,12 @@ These defaults are operational, not clinical thresholds. QC thresholds, calling
 interval policy, filtering cutoffs, and consensus parameters are deliberately not
 configuration keys here; they belong to the named, approved assay profile.
 
+Module 6 reads `ASSAY_PROFILE_DIR/ASSAY_PROFILE/qc.conf`. The tracked
+`config/assay_profiles/illumina-wgs-v1/qc.conf.example` documents the exact
+allowlisted keys. A deployment must copy it to `qc.conf`, assign a versioned
+profile identifier, and approve the read-count and FastQC review/block policies
+under its own change-control process.
+
 ## Sample manifest
 
 The exact twelve-column header is shown in `samples.tsv.example` and documented in

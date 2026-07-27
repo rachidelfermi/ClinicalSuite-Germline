@@ -1,0 +1,2 @@
+sample_id	fastqc_failures	fastqc_warnings	read_pairs	decision
+HG002	1	3	50000	REVIEW

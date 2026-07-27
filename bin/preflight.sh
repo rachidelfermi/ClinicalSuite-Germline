@@ -14,6 +14,7 @@ source "$PREFLIGHT_REPOSITORY_ROOT/containers/lib.sh"
 
 readonly PREFLIGHT_EX_USAGE=64
 readonly PREFLIGHT_EX_UNAVAILABLE=69
+readonly PREFLIGHT_DEFAULT_STAGE='VARIANT_FILTERING'
 readonly -a PREFLIGHT_IMAGES=("${CLINICAL_CONTAINER_IMAGES[@]}")
 readonly -a PREFLIGHT_REFERENCE_IDS=(
     GRCH38_FASTA
@@ -43,6 +44,7 @@ readonly -a PREFLIGHT_OPTIONAL_DATABASE_IDS=(REVEL)
 
 declare -ga PREFLIGHT_ERRORS=()
 declare -ga PREFLIGHT_WARNINGS=()
+declare -ga PREFLIGHT_INFORMATION=()
 declare -ga PREFLIGHT_CHECKS=()
 declare -gA PREFLIGHT_RESOURCE_PATH=()
 declare -gA PREFLIGHT_RESOURCE_KIND=()
@@ -57,10 +59,13 @@ declare -g PREFLIGHT_OUTPUT_DIR=''
 declare -g PREFLIGHT_REFERENCE_CONTIG_STYLE=''
 declare -g PREFLIGHT_FASTA_SHA256=''
 declare -g PREFLIGHT_RESULT=''
+declare -g PREFLIGHT_STAGE_NAME="$PREFLIGHT_DEFAULT_STAGE"
+declare -g PREFLIGHT_STAGE_MODULE=13
 
 preflight_reset() {
     PREFLIGHT_ERRORS=()
     PREFLIGHT_WARNINGS=()
+    PREFLIGHT_INFORMATION=()
     PREFLIGHT_CHECKS=()
     PREFLIGHT_RESOURCE_PATH=()
     PREFLIGHT_RESOURCE_KIND=()
@@ -74,6 +79,8 @@ preflight_reset() {
     PREFLIGHT_OUTPUT_DIR=''
     PREFLIGHT_REFERENCE_CONTIG_STYLE=''
     PREFLIGHT_FASTA_SHA256=''
+    PREFLIGHT_STAGE_NAME="$PREFLIGHT_DEFAULT_STAGE"
+    PREFLIGHT_STAGE_MODULE=13
 }
 
 preflight_error() {
@@ -82,6 +89,10 @@ preflight_error() {
 
 preflight_warning() {
     PREFLIGHT_WARNINGS+=("$1")
+}
+
+preflight_information() {
+    PREFLIGHT_INFORMATION+=("$1")
 }
 
 preflight_pass() {
@@ -98,13 +109,18 @@ preflight_warn_check() {
     preflight_warning "$2"
 }
 
+preflight_info_check() {
+    PREFLIGHT_CHECKS+=("INFO|$1|$2")
+    preflight_information "$2"
+}
+
 preflight_skip() {
     PREFLIGHT_CHECKS+=("SKIP|$1|$2")
 }
 
 preflight_print_usage() {
     cat <<'EOF'
-Usage: bin/preflight.sh --config FILE --samples FILE [--output-dir DIR]
+Usage: bin/preflight.sh --config FILE --samples FILE [OPTIONS]
 
 Validate the complete ClinicalSuite execution environment without starting any
 scientific analysis.
@@ -113,8 +129,106 @@ Options:
   --config FILE       clinical.conf input
   --samples FILE      samples.tsv input
   --output-dir DIR    report directory override
+  --stage STAGE       validate resources through STAGE
+                      (default: VARIANT_FILTERING)
   -h, --help          show this help
+
+Stages:
+  QC, ALIGNMENT, COVERAGE, DEEPVARIANT, HAPLOTYPECALLER, OCTOPUS,
+  CONSENSUS, VARIANT_FILTERING, ANNOTATION, ACMG, REPORTING
 EOF
+}
+
+preflight_set_stage() {
+    local requested="${1^^}"
+
+    requested="${requested//-/_}"
+    case "$requested" in
+        6|QC) PREFLIGHT_STAGE_NAME=QC; PREFLIGHT_STAGE_MODULE=6 ;;
+        7|ALIGNMENT) PREFLIGHT_STAGE_NAME=ALIGNMENT; PREFLIGHT_STAGE_MODULE=7 ;;
+        8|COVERAGE) PREFLIGHT_STAGE_NAME=COVERAGE; PREFLIGHT_STAGE_MODULE=8 ;;
+        9|DEEPVARIANT) PREFLIGHT_STAGE_NAME=DEEPVARIANT; PREFLIGHT_STAGE_MODULE=9 ;;
+        10|GATK|HAPLOTYPECALLER)
+            PREFLIGHT_STAGE_NAME=HAPLOTYPECALLER
+            PREFLIGHT_STAGE_MODULE=10
+            ;;
+        11|OCTOPUS) PREFLIGHT_STAGE_NAME=OCTOPUS; PREFLIGHT_STAGE_MODULE=11 ;;
+        12|CONSENSUS) PREFLIGHT_STAGE_NAME=CONSENSUS; PREFLIGHT_STAGE_MODULE=12 ;;
+        13|FILTERING|VARIANT_FILTERING)
+            PREFLIGHT_STAGE_NAME=VARIANT_FILTERING
+            PREFLIGHT_STAGE_MODULE=13
+            ;;
+        14|ANNOTATION) PREFLIGHT_STAGE_NAME=ANNOTATION; PREFLIGHT_STAGE_MODULE=14 ;;
+        15|ACMG) PREFLIGHT_STAGE_NAME=ACMG; PREFLIGHT_STAGE_MODULE=15 ;;
+        16|REPORT|REPORTING) PREFLIGHT_STAGE_NAME=REPORTING; PREFLIGHT_STAGE_MODULE=16 ;;
+        *) return 1 ;;
+    esac
+}
+
+preflight_stage_label() {
+    printf 'Module %s (%s)\n' "$PREFLIGHT_STAGE_MODULE" "$PREFLIGHT_STAGE_NAME"
+}
+
+preflight_image_first_module() {
+    case "$1" in
+        qc) printf '6\n' ;;
+        alignment) printf '7\n' ;;
+        deepvariant) printf '9\n' ;;
+        # GATK is first consumed by alignment/BAM processing for BQSR.
+        gatk) printf '7\n' ;;
+        octopus) printf '11\n' ;;
+        annotation) printf '14\n' ;;
+        report) printf '16\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+preflight_image_requirement() {
+    local first_module
+
+    first_module="$(preflight_image_first_module "$1")" || return 1
+    preflight_stage_requirement "$first_module" MANDATORY
+}
+
+preflight_resource_first_module() {
+    local scope="$1" id="$2"
+
+    if [[ "$scope" == reference ]]; then
+        case "$id" in
+            GRCH38_PAR_INTERVALS|DEEPVARIANT_MODEL_*) printf '9\n' ;;
+            *) printf '7\n' ;;
+        esac
+        return
+    fi
+    case "$id" in
+        REVEL|ACMG_*|CLINGEN*|HPO*|OMIM*|PANELAPP*|GENEREVIEWS*|DECIPHER*|\
+        AUTOACMG*|INTERVAR*)
+            printf '15\n'
+            ;;
+        *) printf '14\n' ;;
+    esac
+}
+
+preflight_stage_requirement() {
+    local first_module="$1"
+    local eventual_requirement="${2:-MANDATORY}"
+
+    if (( PREFLIGHT_STAGE_MODULE < first_module )); then
+        PREFLIGHT_RESULT=FUTURE
+    else
+        PREFLIGHT_RESULT="$eventual_requirement"
+    fi
+}
+
+preflight_requirement_issue() {
+    local requirement="$1" category="$2" message="$3"
+
+    case "$requirement" in
+        MANDATORY) preflight_fail_check "$category" "$message" ;;
+        OPTIONAL) preflight_warn_check "$category" "$message" ;;
+        FUTURE) preflight_info_check "$category" "$message" ;;
+        *) preflight_fail_check compatibility "Internal requirement error: $requirement" ;;
+    esac
 }
 
 preflight_json_escape() {
@@ -437,11 +551,14 @@ preflight_parse_resource_manifest() {
     local manifest="$3"
     local expected_fields="$4"
     local expected_header="$5"
+    local manifest_requirement="${6:-MANDATORY}"
     local line line_number=0 id path kind requirement assembly version checksum reference_checksum key
+    local row_requirement first_module
     declare -A seen=()
 
     if [[ ! -r "$manifest" ]]; then
-        preflight_fail_check resources "Missing $scope manifest: $manifest"
+        preflight_requirement_issue "$manifest_requirement" resources \
+            "Missing $scope manifest for $(preflight_stage_label): $manifest"
         return
     fi
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -449,13 +566,15 @@ preflight_parse_resource_manifest() {
         line="${line%$'\r'}"
         [[ -n "$line" ]] || continue
         if (( line_number == 1 )); then
-            [[ "$line" == "$expected_header" ]] || \
-                preflight_error "Malformed $scope manifest header: $manifest"
+            [[ "$line" == "$expected_header" ]] ||
+                preflight_requirement_issue "$manifest_requirement" resources \
+                    "Malformed $scope manifest header: $manifest"
             continue
         fi
         clinical_split_tsv "$line"
         if (( ${#CLINICAL_TSV_FIELDS[@]} != expected_fields )); then
-            preflight_error "Malformed $scope manifest row $line_number: expected $expected_fields fields"
+            preflight_requirement_issue "$manifest_requirement" resources \
+                "Malformed $scope manifest row $line_number: expected $expected_fields fields"
             continue
         fi
         id="${CLINICAL_TSV_FIELDS[0]}"
@@ -468,22 +587,31 @@ preflight_parse_resource_manifest() {
         reference_checksum='-'
         (( expected_fields == 8 )) && reference_checksum="${CLINICAL_TSV_FIELDS[7],,}"
         if ! clinical_is_identifier "$id"; then
-            preflight_error "Unsafe resource ID in $scope manifest line $line_number: $id"
+            preflight_requirement_issue "$manifest_requirement" resources \
+                "Unsafe resource ID in $scope manifest line $line_number: $id"
             continue
         fi
+        first_module="$(preflight_resource_first_module "$scope" "$id")"
+        preflight_stage_requirement "$first_module" MANDATORY
+        row_requirement="$PREFLIGHT_RESULT"
         if [[ -v "seen[$id]" ]]; then
-            preflight_error "Duplicate resource ID in $scope manifest: $id"
+            preflight_requirement_issue "$row_requirement" resources \
+                "Duplicate resource ID in $scope manifest: $id"
             continue
         fi
         seen["$id"]=1
-        [[ "$kind" == FILE || "$kind" == DIRECTORY ]] || \
-            preflight_error "Invalid resource kind for $id: $kind"
-        [[ "$requirement" == MANDATORY || "$requirement" == OPTIONAL ]] || \
-            preflight_error "Invalid resource requirement for $id: $requirement"
-        [[ -n "$version" && "$version" != latest ]] || \
-            preflight_error "Unpinned resource version for $id: $version"
+        [[ "$kind" == FILE || "$kind" == DIRECTORY ]] ||
+            preflight_requirement_issue "$row_requirement" resources \
+                "Invalid resource kind for $id: $kind"
+        [[ "$requirement" == MANDATORY || "$requirement" == OPTIONAL ]] ||
+            preflight_requirement_issue "$row_requirement" resources \
+                "Invalid resource requirement for $id: $requirement"
+        [[ -n "$version" && "$version" != latest ]] ||
+            preflight_requirement_issue "$row_requirement" resources \
+                "Unpinned resource version for $id: $version"
         if ! preflight_resolve_resource_path "$root" "$path"; then
-            preflight_error "Malformed resource path for $id: $path"
+            preflight_requirement_issue "$row_requirement" resources \
+                "Malformed resource path for $id: $path"
             continue
         fi
         key="$(preflight_resource_key "$scope" "$id")"
@@ -499,77 +627,91 @@ preflight_parse_resource_manifest() {
             PREFLIGHT_DATABASE_DECLARED_IDS+=("$id")
         fi
     done <"$manifest"
-    preflight_pass resources "$scope manifest parsed: $manifest"
+    if [[ "$manifest_requirement" == FUTURE ]]; then
+        preflight_info_check resources \
+            "Future $scope manifest inspected for $(preflight_stage_label): $manifest"
+    else
+        preflight_pass resources "$scope manifest parsed: $manifest"
+    fi
 }
 
 preflight_check_resource_entry() {
     local scope="$1"
     local id="$2"
     local forced_requirement="${3:-}"
-    local key path kind requirement assembly checksum actual
+    local key path kind requirement assembly checksum actual first_module
 
     key="$(preflight_resource_key "$scope" "$id")"
+    first_module="$(preflight_resource_first_module "$scope" "$id")"
+    preflight_stage_requirement "$first_module" \
+        "${forced_requirement:-${PREFLIGHT_RESOURCE_REQUIREMENT[$key]-MANDATORY}}"
+    requirement="$PREFLIGHT_RESULT"
     if [[ ! -v "PREFLIGHT_RESOURCE_PATH[$key]" ]]; then
-        if [[ "$forced_requirement" == OPTIONAL ]]; then
-            preflight_warn_check resources "Optional resource not declared: $id"
-        else
-            preflight_fail_check resources "Mandatory resource not declared: $id"
-        fi
+        preflight_requirement_issue "$requirement" resources \
+            "$requirement resource not declared: $id (first required Module $first_module)"
         return
     fi
     path="${PREFLIGHT_RESOURCE_PATH[$key]}"
     kind="${PREFLIGHT_RESOURCE_KIND[$key]}"
-    requirement="${forced_requirement:-${PREFLIGHT_RESOURCE_REQUIREMENT[$key]}}"
     assembly="${PREFLIGHT_RESOURCE_ASSEMBLY[$key]}"
     checksum="${PREFLIGHT_RESOURCE_SHA256[$key]}"
+    if [[ "$requirement" == FUTURE ]]; then
+        if [[ "$kind" == FILE && -f "$path" && -r "$path" && -s "$path" ]] ||
+            [[ "$kind" == DIRECTORY && -d "$path" && -r "$path" &&
+                -n "$(find "$path" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
+            preflight_info_check resources \
+                "Future resource declared and available; content validation begins at Module $first_module: $id"
+        else
+            preflight_info_check resources \
+                "FUTURE resource missing or unreadable: $id ($path; first required Module $first_module)"
+        fi
+        return
+    fi
     if [[ "$kind" == FILE ]]; then
         if [[ ! -f "$path" || ! -r "$path" || ! -s "$path" ]]; then
-            if [[ "$requirement" == OPTIONAL ]]; then
-                preflight_warn_check resources "Optional resource missing or unreadable: $id ($path)"
-            else
-                preflight_fail_check resources "Mandatory resource missing or unreadable: $id ($path)"
-            fi
+            preflight_requirement_issue "$requirement" resources \
+                "$requirement resource missing or unreadable: $id ($path)"
             return
         fi
         if [[ ! "$checksum" =~ ^[[:xdigit:]]{64}$ ]]; then
-            preflight_fail_check compatibility "Invalid SHA-256 declaration for resource $id"
+            preflight_requirement_issue "$requirement" compatibility \
+                "Invalid SHA-256 declaration for $requirement resource $id"
         else
             actual="$(calculate_checksum "$path" 2>/dev/null)" || actual=''
             if [[ "$actual" == "$checksum" ]]; then
                 preflight_pass resources "Checksum valid: $id"
             else
-                preflight_fail_check compatibility "Checksum mismatch: $id ($path)"
+                preflight_requirement_issue "$requirement" compatibility \
+                    "Checksum mismatch for $requirement resource: $id ($path)"
             fi
         fi
     elif [[ "$kind" == DIRECTORY ]]; then
         if [[ ! -d "$path" || ! -r "$path" || -z "$(find "$path" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
-            if [[ "$requirement" == OPTIONAL ]]; then
-                preflight_warn_check resources "Optional resource directory missing or empty: $id ($path)"
-            else
-                preflight_fail_check resources "Mandatory resource directory missing or empty: $id ($path)"
-            fi
+            preflight_requirement_issue "$requirement" resources \
+                "$requirement resource directory missing or empty: $id ($path)"
             return
         fi
         preflight_pass resources "Resource directory available: $id"
     fi
     if [[ "$assembly" != GRCh38 ]]; then
-        preflight_fail_check compatibility "Resource assembly mismatch for $id: $assembly"
+        preflight_requirement_issue "$requirement" compatibility \
+            "Resource assembly mismatch for $requirement resource $id: $assembly"
     fi
 }
 
 preflight_require_resource_declaration() {
     local scope="$1"
     local id="$2"
-    local requirement="${3:-MANDATORY}"
-    local key
+    local eventual_requirement="${3:-MANDATORY}"
+    local key first_module requirement
 
     key="$(preflight_resource_key "$scope" "$id")"
+    first_module="$(preflight_resource_first_module "$scope" "$id")"
+    preflight_stage_requirement "$first_module" "$eventual_requirement"
+    requirement="$PREFLIGHT_RESULT"
     if [[ ! -v "PREFLIGHT_RESOURCE_PATH[$key]" ]]; then
-        if [[ "$requirement" == OPTIONAL ]]; then
-            preflight_warn_check resources "Optional resource not declared: $id"
-        else
-            preflight_fail_check resources "Mandatory resource not declared: $id"
-        fi
+        preflight_requirement_issue "$requirement" resources \
+            "$requirement resource not declared: $id (first required Module $first_module)"
         return
     fi
     if [[ "$requirement" == MANDATORY &&
@@ -594,6 +736,7 @@ preflight_required_assays() {
 
 preflight_check_reference_consistency() {
     local fasta_key fai_key dict_key fasta fai dictionary fasta_contig fai_contig dict_contig
+    local requirement
 
     fasta_key="$(preflight_resource_key reference GRCH38_FASTA)"
     fai_key="$(preflight_resource_key reference GRCH38_FASTA_FAI)"
@@ -616,7 +759,9 @@ preflight_check_reference_consistency() {
         [[ "$fasta_contig" == chr* ]] && PREFLIGHT_REFERENCE_CONTIG_STYLE=chr ||
             PREFLIGHT_REFERENCE_CONTIG_STYLE=nochr
     else
-        preflight_fail_check compatibility \
+        preflight_stage_requirement 7 MANDATORY
+        requirement="$PREFLIGHT_RESULT"
+        preflight_requirement_issue "$requirement" compatibility \
             "Reference indexes are inconsistent (FASTA=$fasta_contig FAI=$fai_contig dictionary=$dict_contig)"
     fi
     PREFLIGHT_FASTA_SHA256="${PREFLIGHT_RESOURCE_SHA256[$fasta_key]}"
@@ -625,7 +770,12 @@ preflight_check_reference_consistency() {
 preflight_check_interval_contig() {
     local label="$1"
     local path="$2"
+    local first_module="${3:-8}"
     local contig=''
+    local requirement
+
+    preflight_stage_requirement "$first_module" MANDATORY
+    requirement="$PREFLIGHT_RESULT"
 
     [[ -n "$PREFLIGHT_REFERENCE_CONTIG_STYLE" && -r "$path" ]] || return
     if [[ "$path" == *.gz ]]; then
@@ -640,12 +790,14 @@ preflight_check_interval_contig() {
         done <"$path"
     fi
     [[ -n "$contig" ]] || {
-        preflight_fail_check compatibility "Interval file has no records: $label ($path)"
+        preflight_requirement_issue "$requirement" compatibility \
+            "Interval file has no records for $requirement resource: $label ($path)"
         return
     }
     if [[ "$PREFLIGHT_REFERENCE_CONTIG_STYLE" == chr && "$contig" != chr* ]] ||
         [[ "$PREFLIGHT_REFERENCE_CONTIG_STYLE" == nochr && "$contig" == chr* ]]; then
-        preflight_fail_check compatibility "Interval contig naming is incompatible: $label ($contig)"
+        preflight_requirement_issue "$requirement" compatibility \
+            "Interval contig naming is incompatible for $requirement resource: $label ($contig)"
     else
         preflight_pass compatibility "Interval contig naming matches reference: $label"
     fi
@@ -654,6 +806,8 @@ preflight_check_interval_contig() {
 preflight_check_references_and_databases() {
     local id assay sample_id path key reference_checksum
     local reference_manifest database_manifest
+    local reference_manifest_requirement database_manifest_requirement
+    local resource_requirement first_module
     local reference_header=$'resource_id\tpath\tkind\trequirement\tassembly\tversion\tsha256'
     local database_header=$'resource_id\tpath\tkind\trequirement\tassembly\tversion\tsha256\treference_sha256'
 
@@ -663,8 +817,14 @@ preflight_check_references_and_databases() {
     }
     reference_manifest="$REFERENCE_DIR/reference_manifest.tsv"
     database_manifest="$DATABASE_DIR/database_manifest.tsv"
-    preflight_parse_resource_manifest reference "$REFERENCE_DIR" "$reference_manifest" 7 "$reference_header"
-    preflight_parse_resource_manifest database "$DATABASE_DIR" "$database_manifest" 8 "$database_header"
+    preflight_stage_requirement 7 MANDATORY
+    reference_manifest_requirement="$PREFLIGHT_RESULT"
+    preflight_stage_requirement 14 MANDATORY
+    database_manifest_requirement="$PREFLIGHT_RESULT"
+    preflight_parse_resource_manifest reference "$REFERENCE_DIR" \
+        "$reference_manifest" 7 "$reference_header" "$reference_manifest_requirement"
+    preflight_parse_resource_manifest database "$DATABASE_DIR" \
+        "$database_manifest" 8 "$database_header" "$database_manifest_requirement"
     for id in "${PREFLIGHT_REFERENCE_DECLARED_IDS[@]}"; do
         preflight_check_resource_entry reference "$id"
     done
@@ -689,10 +849,14 @@ preflight_check_references_and_databases() {
         key="$(preflight_resource_key database "$id")"
         [[ -v "PREFLIGHT_RESOURCE_PATH[$key]" ]] || continue
         reference_checksum="${PREFLIGHT_RESOURCE_REFERENCE_SHA256[$key]}"
+        first_module="$(preflight_resource_first_module database "$id")"
+        preflight_stage_requirement "$first_module" \
+            "${PREFLIGHT_RESOURCE_REQUIREMENT[$key]}"
+        resource_requirement="$PREFLIGHT_RESULT"
         if [[ -n "$PREFLIGHT_FASTA_SHA256" &&
             "$reference_checksum" != "$PREFLIGHT_FASTA_SHA256" ]]; then
-            preflight_fail_check compatibility \
-                "Database/reference checksum mismatch for $id"
+            preflight_requirement_issue "$resource_requirement" compatibility \
+                "Database/reference checksum mismatch for $resource_requirement resource $id"
         fi
     done
     for sample_id in "${CLINICAL_SAMPLE_IDS[@]}"; do
@@ -705,12 +869,13 @@ preflight_check_references_and_databases() {
     done
     key="$(preflight_resource_key reference GRCH38_PAR_INTERVALS)"
     [[ ! -v "PREFLIGHT_RESOURCE_PATH[$key]" ]] ||
-        preflight_check_interval_contig GRCH38_PAR_INTERVALS "${PREFLIGHT_RESOURCE_PATH[$key]}"
+        preflight_check_interval_contig GRCH38_PAR_INTERVALS \
+            "${PREFLIGHT_RESOURCE_PATH[$key]}" 9
 }
 
 preflight_check_versions_lock() {
     local lock_file="$CONTAINER_DIR/versions.lock"
-    local image component version source checksum
+    local image component version source checksum requirement
     declare -A seen=()
 
     if [[ ! -r "$lock_file" ]]; then
@@ -723,21 +888,32 @@ preflight_check_versions_lock() {
             preflight_error "Unsafe image name in versions.lock: $image"
             continue
         fi
+        if ! preflight_image_requirement "$image"; then
+            preflight_error "Unknown image in versions.lock: $image"
+            continue
+        fi
+        requirement="$PREFLIGHT_RESULT"
         if [[ "$version" == latest || -z "$version" ]]; then
-            preflight_error "Unpinned container component: $image/$component"
+            preflight_requirement_issue "$requirement" containers \
+                "Unpinned $requirement container component: $image/$component"
         fi
         if [[ "$source" == docker://* && "$source" != *@sha256:* ]]; then
-            preflight_error "Unpinned OCI source: $image/$component"
+            preflight_requirement_issue "$requirement" containers \
+                "Unpinned OCI source for $requirement container: $image/$component"
         fi
-        [[ "$checksum" == - || "$checksum" =~ ^[[:xdigit:]]{64}$ ]] || \
-            preflight_error "Malformed component checksum: $image/$component"
+        [[ "$checksum" == - || "$checksum" =~ ^[[:xdigit:]]{64}$ ]] ||
+            preflight_requirement_issue "$requirement" containers \
+                "Malformed component checksum for $requirement container: $image/$component"
         seen["$image"]=1
     done <"$lock_file"
     for image in "${PREFLIGHT_IMAGES[@]}"; do
+        preflight_image_requirement "$image"
+        requirement="$PREFLIGHT_RESULT"
         if [[ -v "seen[$image]" ]]; then
             preflight_pass containers "versions.lock contains image: $image"
         else
-            preflight_fail_check containers "versions.lock lacks image: $image"
+            preflight_requirement_issue "$requirement" containers \
+                "versions.lock lacks $requirement image: $image"
         fi
     done
 }
@@ -749,7 +925,15 @@ preflight_check_container_command() {
     local expected_status="$4"
     shift 4
     local image_path="$CONTAINER_DIR/$image.sif"
-    local output status
+    local output status requirement
+
+    preflight_image_requirement "$image"
+    requirement="$PREFLIGHT_RESULT"
+    if [[ "$requirement" == FUTURE ]]; then
+        preflight_info_check containers \
+            "Future container executable check deferred until Module $(preflight_image_first_module "$image"): $label in $image.sif"
+        return
+    fi
 
     if output="$("$APPTAINER_BIN" exec --cleanenv --containall --no-home --pwd / \
         --net --network none "$image_path" "$@" 2>&1)"; then
@@ -767,7 +951,7 @@ preflight_check_container_command() {
 
 preflight_check_containers() {
     local checksum_file
-    local digest filename image actual
+    local digest filename image actual requirement
     local containers_ready=true
     declare -A expected=()
 
@@ -782,13 +966,21 @@ preflight_check_containers() {
     else
         while read -r digest filename _; do
             [[ -n "$digest" && -n "$filename" ]] || continue
-            if [[ ! "$digest" =~ ^[[:xdigit:]]{64}$ ||
-                ! "$filename" =~ ^(qc|alignment|gatk|octopus|deepvariant|annotation|report)\.sif$ ]]; then
+            if [[ ! "$filename" =~ ^(qc|alignment|gatk|octopus|deepvariant|annotation|report)\.sif$ ]]; then
                 preflight_error "Malformed container checksum entry: $digest $filename"
                 continue
             fi
+            image="${filename%.sif}"
+            preflight_image_requirement "$image"
+            requirement="$PREFLIGHT_RESULT"
+            if [[ ! "$digest" =~ ^[[:xdigit:]]{64}$ ]]; then
+                preflight_requirement_issue "$requirement" containers \
+                    "Malformed checksum for $requirement container: $filename"
+                continue
+            fi
             if [[ -v "expected[$filename]" ]]; then
-                preflight_error "Duplicate container checksum entry: $filename"
+                preflight_requirement_issue "$requirement" containers \
+                    "Duplicate checksum entry for $requirement container: $filename"
                 continue
             fi
             expected["$filename"]="${digest,,}"
@@ -796,22 +988,32 @@ preflight_check_containers() {
     fi
     for image in "${PREFLIGHT_IMAGES[@]}"; do
         filename="$image.sif"
+        preflight_image_requirement "$image"
+        requirement="$PREFLIGHT_RESULT"
         if [[ ! -f "$CONTAINER_DIR/$filename" || ! -r "$CONTAINER_DIR/$filename" ]]; then
-            preflight_fail_check containers "Missing container: $CONTAINER_DIR/$filename"
-            containers_ready=false
+            preflight_requirement_issue "$requirement" containers \
+                "Missing $requirement container: $CONTAINER_DIR/$filename"
+            [[ "$requirement" == FUTURE ]] || containers_ready=false
             continue
         fi
         if [[ ! -v "expected[$filename]" ]]; then
-            preflight_fail_check containers "No checksum recorded for container: $filename"
-            containers_ready=false
+            preflight_requirement_issue "$requirement" containers \
+                "No checksum recorded for $requirement container: $filename"
+            [[ "$requirement" == FUTURE ]] || containers_ready=false
+            continue
+        fi
+        if [[ "$requirement" == FUTURE ]]; then
+            preflight_info_check containers \
+                "Future container integrity validation deferred until Module $(preflight_image_first_module "$image"): $filename"
             continue
         fi
         actual="$(calculate_checksum "$CONTAINER_DIR/$filename" 2>/dev/null)" || actual=''
         if [[ "$actual" == "${expected[$filename]}" ]]; then
             preflight_pass containers "Container checksum valid: $filename"
         else
-            preflight_fail_check containers "Container checksum mismatch: $filename"
-            containers_ready=false
+            preflight_requirement_issue "$requirement" containers \
+                "Container checksum mismatch for $requirement container: $filename"
+            [[ "$requirement" == FUTURE ]] || containers_ready=false
         fi
     done
 
@@ -863,9 +1065,11 @@ preflight_write_text_report() {
     {
         printf 'ClinicalSuite V2 preflight report\n'
         printf 'Generated (UTC): %s\n' "$generated"
+        printf 'Execution stage: %s\n' "$(preflight_stage_label)"
         printf 'Status: %s\n' "$status"
         printf 'Errors: %s\n' "${#PREFLIGHT_ERRORS[@]}"
         printf 'Warnings: %s\n' "${#PREFLIGHT_WARNINGS[@]}"
+        printf 'Information: %s\n' "${#PREFLIGHT_INFORMATION[@]}"
         printf '\nErrors\n------\n'
         if (( ${#PREFLIGHT_ERRORS[@]} == 0 )); then
             printf 'None\n'
@@ -881,6 +1085,16 @@ preflight_write_text_report() {
             printf 'None\n'
         else
             for item in "${PREFLIGHT_WARNINGS[@]}"; do
+                ((index += 1))
+                printf '%s. %s\n' "$index" "$item"
+            done
+        fi
+        printf '\nInformation\n-----------\n'
+        index=0
+        if (( ${#PREFLIGHT_INFORMATION[@]} == 0 )); then
+            printf 'None\n'
+        else
+            for item in "${PREFLIGHT_INFORMATION[@]}"; do
                 ((index += 1))
                 printf '%s. %s\n' "$index" "$item"
             done
@@ -916,15 +1130,20 @@ preflight_write_json_report() {
 
     {
         printf '{\n'
-        printf '  "schema_version": "1.0",\n'
+        printf '  "schema_version": "1.1",\n'
         printf '  "generated_at": "%s",\n' "$generated"
+        printf '  "execution_stage": "%s",\n' "$PREFLIGHT_STAGE_NAME"
+        printf '  "execution_module": %s,\n' "$PREFLIGHT_STAGE_MODULE"
         printf '  "status": "%s",\n' "$status"
         printf '  "error_count": %s,\n' "${#PREFLIGHT_ERRORS[@]}"
         printf '  "warning_count": %s,\n' "${#PREFLIGHT_WARNINGS[@]}"
+        printf '  "information_count": %s,\n' "${#PREFLIGHT_INFORMATION[@]}"
         printf '  "errors": '
         preflight_write_json_array PREFLIGHT_ERRORS
         printf ',\n  "warnings": '
         preflight_write_json_array PREFLIGHT_WARNINGS
+        printf ',\n  "information": '
+        preflight_write_json_array PREFLIGHT_INFORMATION
         printf ',\n  "checks": ['
         for item in "${PREFLIGHT_CHECKS[@]}"; do
             result="${item%%|*}"
@@ -963,8 +1182,10 @@ preflight_run() {
     local config_file="$1"
     local samples_file="$2"
     local output_override="${3:-}"
+    local requested_stage="${4:-$PREFLIGHT_DEFAULT_STAGE}"
 
     preflight_reset
+    preflight_set_stage "$requested_stage" || return "$PREFLIGHT_EX_USAGE"
     preflight_validate_configuration "$config_file" "$samples_file" || true
     preflight_prepare_output "$output_override" || return 1
     if [[ "$PREFLIGHT_CONFIG_VALID" == true ]]; then
@@ -988,6 +1209,7 @@ preflight_run() {
 
 preflight_main() {
     local config_file='' samples_file='' output_dir=''
+    local stage="$PREFLIGHT_DEFAULT_STAGE"
 
     while (( $# > 0 )); do
         case "$1" in
@@ -1003,13 +1225,21 @@ preflight_main() {
                 (( $# >= 2 )) || { printf 'ERROR: --output-dir requires a value\n' >&2; return "$PREFLIGHT_EX_USAGE"; }
                 output_dir="$2"; shift 2
                 ;;
+            --stage)
+                (( $# >= 2 )) || { printf 'ERROR: --stage requires a value\n' >&2; return "$PREFLIGHT_EX_USAGE"; }
+                stage="$2"; shift 2
+                ;;
             -h|--help) preflight_print_usage; return 0 ;;
             *) printf 'ERROR: unknown argument: %s\n' "$1" >&2; return "$PREFLIGHT_EX_USAGE" ;;
         esac
     done
     [[ -n "$config_file" ]] || { printf 'ERROR: --config is required\n' >&2; return "$PREFLIGHT_EX_USAGE"; }
     [[ -n "$samples_file" ]] || { printf 'ERROR: --samples is required\n' >&2; return "$PREFLIGHT_EX_USAGE"; }
-    preflight_run "$config_file" "$samples_file" "$output_dir"
+    if ! preflight_set_stage "$stage"; then
+        printf 'ERROR: invalid --stage value: %s\n' "$stage" >&2
+        return "$PREFLIGHT_EX_USAGE"
+    fi
+    preflight_run "$config_file" "$samples_file" "$output_dir" "$stage"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

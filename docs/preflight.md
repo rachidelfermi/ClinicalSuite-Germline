@@ -7,13 +7,25 @@ analysis.
 ## Usage
 
 ```bash
-bin/preflight.sh --config clinical.conf --samples samples.tsv
+bin/preflight.sh --config clinical.conf --samples samples.tsv \
+  --stage VARIANT_FILTERING
 ./run.sh --config clinical.conf --samples samples.tsv --preflight-only
 ```
 
 Valid configuration writes to `RUN_ROOT/RUN_ID/preflight`; `--output-dir` can
 override this location. Exit status is `0` for a pass, `69` for validation
 failure, `64` for CLI misuse, and `1` if reports cannot be produced.
+
+`--stage` selects the last module whose complete runtime requirements must be
+available. It accepts module numbers 6–16 or the names `QC`, `ALIGNMENT`,
+`COVERAGE`, `DEEPVARIANT`, `HAPLOTYPECALLER`, `OCTOPUS`, `CONSENSUS`,
+`VARIANT_FILTERING`, `ANNOTATION`, `ACMG`, and `REPORTING`. The development
+default is `VARIANT_FILTERING` (Module 13).
+
+Resources first consumed after the selected stage are reported as `INFO`. Their
+absence, empty directories, checksum validation, executable validation, and
+compatibility checks do not make preflight fail. Once the selected stage reaches
+their first consumer, the manifest's `MANDATORY` or `OPTIONAL` policy applies.
 
 ## External resource manifests
 
@@ -23,16 +35,20 @@ Preflight reads `REFERENCE_DIR/reference_manifest.tsv` and
 Files carry SHA-256 values; directories use `-`. Versions are pinned and genomic
 resources declare `GRCh38`.
 
-Mandatory reference IDs are `GRCH38_FASTA`, `GRCH38_FASTA_FAI`,
+From alignment onward, mandatory reference IDs are `GRCH38_FASTA`, `GRCH38_FASTA_FAI`,
 `GRCH38_SEQUENCE_DICTIONARY`, `BWA_MEM2_INDEX`, `GRCH38_PAR_INTERVALS`,
 `KNOWN_INDELS`, `KNOWN_INDELS_INDEX`, `MILLS_INDELS`, `MILLS_INDELS_INDEX`, and
-the assay-specific `DEEPVARIANT_MODEL_WGS`/`DEEPVARIANT_MODEL_WES`.
+the assay-specific `DEEPVARIANT_MODEL_WGS`/`DEEPVARIANT_MODEL_WES`. PAR and
+DeepVariant models first become mandatory at Module 9.
 
-Mandatory database IDs are `CLINVAR`, `CLINVAR_INDEX`, `DBSNP`, `DBSNP_INDEX`,
+At Module 14, mandatory annotation database IDs are `CLINVAR`, `CLINVAR_INDEX`, `DBSNP`, `DBSNP_INDEX`,
 `GNOMAD`, `GNOMAD_INDEX`, `VEP_CACHE`, `LOFTEE`, `SPLICEAI`,
-`SPLICEAI_INDEX`, and `DBNSFP`. `REVEL` is optional and absent REVEL produces a
-warning. Every additional manifest row marked `MANDATORY` is enforced. Database
-rows record the compatible FASTA SHA-256.
+`SPLICEAI_INDEX`, and `DBNSFP`. Before Module 14 they are informational.
+`REVEL` and IDs prefixed for ACMG/ClinGen/phenotype/interpretation use are
+deferred until Module 15; `REVEL` remains optional and produces a warning when
+absent at that stage. Additional database rows default to Module 14 unless their
+ID identifies an ACMG-stage resource. Database rows record the compatible FASTA
+SHA-256.
 
 ## Validation and reports
 
@@ -47,5 +63,6 @@ operational free-space gate.
 Outputs are written atomically:
 
 - `preflight_report.txt`: human-readable aggregated result;
-- `preflight.json`: schema-versioned input for later modules;
+- `preflight.json`: schema-versioned input for later modules, including
+  `execution_stage`, `execution_module`, and informational findings;
 - `preflight.log`: plain-text shared-library log.

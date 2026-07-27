@@ -35,6 +35,14 @@ remain external; `annotation.sif` contains VEP and its runtime only; and
 the broader bundling descriptions in sections 8 and 10.2 without changing any
 scientific workflow.
 
+The approved staged-preflight directive dated 2026-07-27 makes external
+resource requirements conditional on the selected execution stage. Resources
+first consumed by annotation are informational through Module 13 and become
+mandatory at Module 14. Resources first consumed by ACMG decision support are
+informational through Module 14 and become mandatory at Module 15. This changes
+only validation timing; it does not change any scientific workflow or resource
+compatibility requirement.
+
 ## 1. Clinical status and scope
 
 ClinicalSuite V2 is designed to become a reproducible clinical bioinformatics
