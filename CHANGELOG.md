@@ -66,3 +66,11 @@ require signed validation and change-control records.
   the former Module 7 implementation.
 - Replaced mocked Module 7 integration/smoke coverage with tests that exercise
   real Apptainer containers and scientifically valid artifacts.
+
+### Known issues
+
+- Full-reference HG002 Module 7 validation requires a host with enough memory
+  to load the production BWA-MEM2 index. The current 16 GB development host was
+  terminated while reading the verified `.0123` component after reaching
+  12,915,584 KB peak RSS; Module 7 remains unapproved pending the unchanged run
+  on the project HPC.

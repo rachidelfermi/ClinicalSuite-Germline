@@ -52,7 +52,7 @@ Current version: **2.0.0-dev**
 | 4. Apptainer container system | Complete | [Container validation report](containers/container_validation_report.txt) |
 | 5. Preflight validation | Complete | [Validation record](validation/preflight.md) |
 | 6. Quality control | Complete | [Validation record](validation/quality-control.md) |
-| 7. Alignment and BAM processing | Revalidation in progress | [Independent review](validation/alignment-independent-review.md) |
+| 7. Alignment and BAM processing | Revalidation blocked by validation-host RAM | [Independent review](validation/alignment-independent-review.md) |
 | 8–16. Scientific and reporting modules | Pending | Not implemented |
 | 17. Integration testing | Pending | Module-level integration tests exist; complete workflow pending |
 | 18. End-to-end validation | Pending | Not started |

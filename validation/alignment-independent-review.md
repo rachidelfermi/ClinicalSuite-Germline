@@ -69,9 +69,27 @@ ShellCheck 0.11.0, and whitespace validation pass for the replacement files.
 The project-generated HPC BWA-MEM2 index for the locked Broad GRCh38 Full
 Analysis Set + Decoy + HLA has replaced the unusable local index as the sole
 production index. Its FASTA identity, 3,366-contig FAI, index inventory, and all
-declared SHA-256 checksums pass verification. The full HG002 run is in progress;
-Module 7 remains unapproved until its BAM validation, checkpoint reuse, and
-reproducibility checks pass.
+declared SHA-256 checksums pass verification. BWA-MEM2 2.3 also loaded the full
+index, reported the expected 6,434,693,835-base bidirectional reference and
+3,171 ALT contigs, and began reading the checksum-verified `.0123` component.
+
+The complete HG002 run cannot finish on the present 16,056,796-KiB development
+host. The unchanged production command reached 12,915,584 KB peak RSS, consumed
+about 1.3 GB of the 2 GB host swap, and was terminated while reading `.0123`.
+Samtools then correctly rejected the empty stream because no SAM header had
+been produced. No sorted BAM or scientific checkpoint was published. Direct
+HPC login is unavailable from this session, so the same signed work directory
+must be resumed on an adequately provisioned project HPC node. Module 7 remains
+unapproved until BAM validation, checkpoint reuse, and reproducibility pass.
+
+Observed partial-run metrics:
+
+- elapsed time: 39:17.32, dominated by checksum verification and memory-driven
+  index I/O;
+- user/system CPU: 132.21/40.34 seconds;
+- peak resident memory: 12,915,584 KB;
+- major/minor page faults: 5,131/3,441,106; and
+- filesystem input: 79,183,904 blocks.
 
 ## Evidence reviewed
 
