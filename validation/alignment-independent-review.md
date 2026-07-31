@@ -78,9 +78,10 @@ host. The unchanged production command reached 12,915,584 KB peak RSS, consumed
 about 1.3 GB of the 2 GB host swap, and was terminated while reading `.0123`.
 Samtools then correctly rejected the empty stream because no SAM header had
 been produced. No sorted BAM or scientific checkpoint was published. Direct
-HPC login is unavailable from this session, so the same signed work directory
-must be resumed on an adequately provisioned project HPC node. Module 7 remains
-unapproved until BAM validation, checkpoint reuse, and reproducibility pass.
+HPC login is unavailable from this session, so the same validated configuration
+and unchanged command must be run on an adequately provisioned project HPC
+node. Module 7 remains unapproved until BAM validation, checkpoint reuse, and
+reproducibility pass.
 
 Observed partial-run metrics:
 
