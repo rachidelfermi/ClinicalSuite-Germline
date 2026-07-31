@@ -11,6 +11,12 @@ orchestrates the immutable `qc.sif` dependency. It performs raw FastQC,
 non-modifying fastp reporting, MultiQC aggregation, policy evaluation,
 provenance capture, atomic publication, and checkpoint reuse.
 
+`bin/alignment.sh` is Module 7. It consumes only Module 6's checksum-verified
+FASTQ handoff and orchestrates BWA-MEM2, Samtools, Picard MarkDuplicates, and
+GATK BQSR through the common container wrapper. It provides per-step resumable
+checkpoints, strict analysis-ready BAM validation, provenance, and atomic
+publication. See `docs/alignment.md`.
+
 ## Public API
 
 - Initialization/logging: `common_init`, `log_info`, `log_warning`, `log_error`,

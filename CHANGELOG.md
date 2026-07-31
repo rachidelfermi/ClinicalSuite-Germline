@@ -37,6 +37,13 @@ require signed validation and change-control records.
   non-modifying fastp reporting, MultiQC aggregation, assay-profile policy
   evaluation, immutable provenance, integrity checks, and resumable checkpoints.
 - Module 6 unit, real-container integration, and 50,000-pair HG002 smoke tests.
+- Independently rewritten Module 7 alignment/BAM-processing orchestration for
+  BWA-MEM2, coordinate sorting/indexing, Picard MarkDuplicates, GATK BQSR, final
+  indexing, and strict analysis-ready BAM validation.
+- Module 7 corruption-aware step checkpoints, immutable checksums, command/tool
+  provenance, QC handoff verification, and deterministic output publication.
+- Independent Module 7 unit tests, real-container synthetic integration tests,
+  and an HG002 production-reference smoke-test harness.
 
 ### Changed
 
@@ -45,3 +52,17 @@ require signed validation and change-control records.
 - Made Module 5 external-resource and container validation conditional on the
   selected execution stage. Annotation inputs are informational through Module
   13, and ACMG inputs are informational through Module 14.
+- Extended `run.sh` to execute stage-aware `ALIGNMENT` preflight, Module 6, then
+  Module 7, while retaining a hard stop before Module 8.
+- Locked Module 7 to the project-generated HPC BWA-MEM2 index for the Broad
+  GRCh38 Full Analysis Set + Decoy + HLA reference; no third-party prebuilt
+  index is accepted or referenced.
+
+### Fixed
+
+- Corrected missing container mounts, unchecked reference declarations,
+  malformed BWA read groups, undeclared GATK indexes, self-referential output
+  checksums, unsafe/incomplete checkpoints, and insufficient BAM validation in
+  the former Module 7 implementation.
+- Replaced mocked Module 7 integration/smoke coverage with tests that exercise
+  real Apptainer containers and scientifically valid artifacts.

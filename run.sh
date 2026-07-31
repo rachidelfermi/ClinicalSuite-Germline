@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
 readonly PREFLIGHT_SCRIPT="$SCRIPT_DIR/bin/preflight.sh"
 readonly QC_SCRIPT="$SCRIPT_DIR/bin/qc.sh"
+readonly ALIGNMENT_SCRIPT="$SCRIPT_DIR/bin/alignment.sh"
 
 ###############################################################################
 # USER INTERFACE
@@ -25,7 +26,7 @@ print_usage() {
     printf '  --preflight-only       stop successfully after preflight\n'
     printf '  --preflight-dir DIR    override preflight report directory\n'
     printf '  -h, --help             show this help\n'
-    printf '\nClinicalSuite V2 currently executes through Module 6 quality control.\n'
+    printf '\nClinicalSuite V2 currently executes through Module 7 alignment and BAM processing.\n'
 }
 
 print_not_available() {
@@ -75,7 +76,11 @@ main() {
     [[ -n "$config_file" ]] || { printf 'ERROR: --config is required\n' >&2; return "$EX_USAGE"; }
     [[ -n "$samples_file" ]] || { printf 'ERROR: --samples is required\n' >&2; return "$EX_USAGE"; }
 
-    preflight_arguments=(--config "$config_file" --samples "$samples_file")
+    preflight_arguments=(
+        --config "$config_file"
+        --samples "$samples_file"
+        --stage ALIGNMENT
+    )
     [[ -z "$preflight_dir" ]] || preflight_arguments+=(--output-dir "$preflight_dir")
     if "$PREFLIGHT_SCRIPT" "${preflight_arguments[@]}"; then
         status=0
@@ -92,7 +97,13 @@ main() {
         status=$?
     fi
     (( status == 0 )) || return "$status"
-    printf 'Quality control completed; alignment is not implemented yet.\n' >&2
+    if "$ALIGNMENT_SCRIPT" --config "$config_file" --samples "$samples_file"; then
+        status=0
+    else
+        status=$?
+    fi
+    (( status == 0 )) || return "$status"
+    printf 'ClinicalSuite completed through Module 7 alignment and BAM processing.\n'
 }
 
 main "$@"

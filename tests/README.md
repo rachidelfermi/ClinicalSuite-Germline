@@ -16,3 +16,8 @@ Module 6 has pure-function unit coverage, a one-pair synthetic real-container
 integration test, and an end-to-end launcher smoke test using the approved
 50,000-pair HG002 fixture. These tests validate software behavior only; they are
 not analytical or clinical validation.
+
+Module 7 has independently rewritten unit tests, a deterministic synthetic
+real-container integration test, and an HG002/full-reference smoke test. The
+smoke test checks strict BAM validity, BQSR, checkpoints, output checksums, and
+reproducibility; it is not a sensitivity or accuracy benchmark.

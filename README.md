@@ -7,8 +7,10 @@ sequencing (WGS) and whole-exome sequencing (WES).
 The V2 implementation is being developed as a sequence of independently tested
 modules. The repository currently provides the validated configuration,
 shared-runtime, Apptainer-container, preflight, and paired-end FASTQ
-quality-control modules. Alignment and later analysis modules are not yet
-operational.
+quality-control modules. Module 7 alignment/BAM processing has been independently
+rewritten and has passed unit and real-container integration testing; its full
+HG002 production-reference validation is in progress. Later analysis modules
+are not yet operational.
 
 > [!CAUTION]
 > ClinicalSuite V2 is development software. It is not a validated clinical
@@ -50,13 +52,14 @@ Current version: **2.0.0-dev**
 | 4. Apptainer container system | Complete | [Container validation report](containers/container_validation_report.txt) |
 | 5. Preflight validation | Complete | [Validation record](validation/preflight.md) |
 | 6. Quality control | Complete | [Validation record](validation/quality-control.md) |
-| 7–16. Scientific and reporting modules | Pending | Not implemented |
+| 7. Alignment and BAM processing | Revalidation in progress | [Independent review](validation/alignment-independent-review.md) |
+| 8–16. Scientific and reporting modules | Pending | Not implemented |
 | 17. Integration testing | Pending | Module-level integration tests exist; complete workflow pending |
 | 18. End-to-end validation | Pending | Not started |
 
-`run.sh` currently executes mandatory preflight followed by Module 6 quality
-control. It stops after QC and does not start alignment, variant calling,
-annotation, interpretation, or reporting.
+`run.sh` currently executes stage-aware mandatory preflight, Module 6 quality
+control, and Module 7 alignment/BAM processing. It stops before coverage,
+variant calling, annotation, interpretation, and reporting.
 
 The authoritative live status is maintained in
 [docs/implementation-status.md](docs/implementation-status.md).
@@ -390,6 +393,19 @@ is rejected rather than silently mixed with an existing result.
 See [docs/quality-control.md](docs/quality-control.md) for the output contract
 and [validation/quality-control.md](validation/quality-control.md) for the
 HG002 software-validation result.
+
+## Alignment and BAM processing
+
+Module 7 consumes only Module 6's checksum-verified FASTQ handoff. It performs
+BWA-MEM2 alignment, coordinate sorting and indexing, Picard duplicate marking,
+GATK BaseRecalibrator/ApplyBQSR, final indexing, and strict analysis-ready BAM
+validation. It uses the locked Broad GRCh38 Full Analysis Set + Decoy + HLA and
+assembly-matched known-site resources declared in the external reference
+manifest.
+
+See [docs/alignment.md](docs/alignment.md) for the execution/output contract and
+[validation/alignment-independent-review.md](validation/alignment-independent-review.md)
+for the independent scientific and software review.
 
 ## External references and databases
 

@@ -12,3 +12,7 @@ validated configuration access.
 
 `test_preflight.sh` covers aggregation, JSON safety, FASTQ pairing, resource path
 safety, disk-space policy, atomic reports, and the CLI contract.
+
+`test_alignment.sh` covers escaped read-group construction, locked-reference and
+known-site manifest validation, checksum failures, unsafe and duplicate manifest
+rows, Module 6 handoff integrity, and per-step checkpoint corruption.

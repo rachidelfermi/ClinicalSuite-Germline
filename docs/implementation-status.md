@@ -8,7 +8,7 @@
 | 4 | Container build system | Complete | See `containers/container_validation_report.txt` |
 | 5 | Preflight | Complete | See `validation/preflight.md` |
 | 6 | Quality control | Complete | See `validation/quality-control.md` |
-| 7 | Alignment and BAM processing | Pending | Not started |
+| 7 | Alignment and BAM processing | Revalidation in progress | See `validation/alignment-independent-review.md` |
 | 8 | Coverage analysis | Pending | Not started |
 | 9 | DeepVariant | Pending | Not started |
 | 10 | GATK HaplotypeCaller | Pending | Not started |
