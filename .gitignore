@@ -7,32 +7,58 @@ results/
 work/
 logs/
 tmp/
+
 *.bam
 *.bai
 *.cram
 *.crai
+
 *.fastq
 *.fastq.gz
 *.fq
 *.fq.gz
+
 !tests/data/fastq/HG002_test_R1.fastq.gz
 !tests/data/fastq/HG002_test_R2.fastq.gz
+
 *.g.vcf
 *.g.vcf.gz
 *.vcf
 *.vcf.gz
 
 ###############################################################################
-# EXTERNAL REFERENCES, DATABASES, AND CONTAINER BINARIES
+# EXTERNAL REFERENCES AND DATABASES
 ###############################################################################
 
 references/*
 !references/README.md
 !references/prepare_grch38.sh
+
 databases/*
 !databases/README.md
-containers/*.sif
-containers/*.sif.sha256
+
+###############################################################################
+# CONDA RUNTIME ENVIRONMENTS (GENERATED)
+###############################################################################
+
+envs/qc/
+envs/alignment/
+envs/variant/
+envs/deepvariant/
+envs/octopus/
+envs/annotation/
+envs/report/
+
+envs/packed/
+envs/.build/
+
+###############################################################################
+# CONDA EXPORTS
+###############################################################################
+
+*.tar.gz
+*.conda
+*.conda-pack
 
 ###############################################################################
 # LOCAL CONFIGURATION AND SECRETS
@@ -40,6 +66,7 @@ containers/*.sif.sha256
 
 config/*.conf
 config/samples.tsv
+
 *.env
 *.pem
 *.key
@@ -50,24 +77,28 @@ config/samples.tsv
 
 __pycache__/
 *.py[cod]
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
 coverage.xml
 htmlcov/
-container_validation_report.txt
-!containers/container_validation_report.txt
 
-# Local build inputs are checksum-verified and may be recreated by build.sh.
-containers/.build/
+build_report.txt
+
+.release/
 
 ###############################################################################
-# EDITOR AND OPERATING-SYSTEM FILES
+# EDITOR AND OPERATING SYSTEM
 ###############################################################################
 
 .DS_Store
+Thumbs.db
+
 *~
 *.swp
 *.swo
+
 .idea/
 .vscode/

@@ -1,70 +1,188 @@
 # ClinicalSuite Germline V2
 
-ClinicalSuite is a reproducible, clinically oriented Bash framework for
-paired-end human germline WGS/WES. It currently executes preflight, quality
-control, alignment, duplicate marking, and BQSR (Modules 5–7). Later discovery,
-annotation, interpretation, and reporting modules remain staged work.
+ClinicalSuite Germline V2 is an open-source, clinically oriented, reproducible
+human germline variant discovery framework for paired-end Illumina-compatible
+short-read sequencing.
 
-> Clinical status: this software is not a validated clinical assay or medical
-> device. Each laboratory must perform end-to-end, assay-specific validation in
-> its production environment before patient reporting.
+The project targets:
 
-## Runtime migration
+- Whole Genome Sequencing (WGS)
+- Whole Exome Sequencing (WES)
+- Illumina
+- GeneMind (validated Illumina-compatible workflows)
 
-ClinicalSuite uses isolated Conda environments because the production HPC does
-not permit Apptainer user namespaces or setuid execution. This migration changes
-only runtime packaging. Scientific commands, module interfaces, ordering,
-configuration, checkpoints, provenance, and output contracts are unchanged.
+ClinicalSuite is designed around reproducibility, transparency, modularity and
+scientific validation rather than proprietary automation.
 
-- Mamba is the only permitted installer (`mamba create` / `mamba install`).
-- Users never activate environments; launchers select them automatically.
-- Every direct package is version-pinned.
-- Every validated prefix has an explicit lock and resolved YAML.
-- `conda-pack` archives are produced only after validation succeeds.
-- References, models, caches, plugins, and databases remain external.
+Every analytical decision is traceable, reproducible and version controlled.
 
-## Project status
+---
+
+> **Clinical Status**
+>
+> ClinicalSuite is **not** a validated clinical assay, an in-vitro diagnostic
+> device, or a substitute for laboratory accreditation.
+>
+> Every laboratory must perform complete analytical and clinical validation
+> using its own instruments, wet-lab workflow, personnel, and production
+> environment before reporting patient results.
+
+---
+
+# Project Philosophy
+
+ClinicalSuite follows several core principles.
+
+- Fully open-source
+- Fully reproducible
+- Offline capable
+- HPC friendly
+- Bash-first workflow
+- Deterministic execution
+- Transparent evidence
+- Modular implementation
+- Minimal external dependencies
+
+ClinicalSuite intentionally avoids proprietary knowledge bases,
+black-box algorithms, machine learning classifiers, and closed
+clinical interpretation engines.
+
+Instead, it combines:
+
+- validated scientific software
+- peer-reviewed methodologies
+- open clinical databases
+- deterministic ACMG rules
+- complete provenance
+
+into a transparent clinical workflow.
+
+---
+
+# Runtime
+
+ClinicalSuite uses isolated **Conda environments**.
+
+The previous Apptainer runtime was removed because the target production HPC
+does not support user namespaces or setuid Apptainer execution.
+
+This change affects only runtime packaging.
+
+The scientific workflow, module interfaces, validation strategy,
+outputs, checkpoints and provenance remain unchanged.
+
+Runtime principles:
+
+- Mamba is the only supported installer.
+- Users never manually activate environments.
+- The launcher automatically selects the correct environment.
+- Every package version is pinned.
+- Every environment is validated before use.
+- Every validated environment is frozen.
+- Every environment is distributed as:
+  - explicit lock file
+  - resolved YAML
+  - conda-pack archive
+- References, annotation databases, VEP caches, models and plugins remain
+  external resources.
+
+---
+
+# Project Status
 
 | Module | Status |
-|---|---|
-| 1 Repository skeleton | Complete |
-| 2 Configuration system | Complete |
-| 3 Common Bash library | Complete |
-| 4 Conda runtime system | Migrated; validation evidence in `envs/` |
-| 5 Stage-aware preflight | Complete; migrated to Conda checks |
-| 6 Quality control | Complete; Conda revalidation included |
-| 7 Alignment and BAM processing | Independently rewritten; full-reference validation is RAM constrained on the development host |
-| 8–16 downstream scientific modules | Pending |
+|----------|---------|
+| Repository Skeleton | ✅ Complete |
+| Configuration System | ✅ Complete |
+| Common Bash Library | ✅ Complete |
+| Conda Runtime | ✅ Complete |
+| Stage-aware Preflight | ✅ Complete |
+| Quality Control | ✅ Complete |
+| Alignment & BAM Processing | ✅ Complete |
+| Coverage Analysis | 🚧 Pending |
+| DeepVariant | 🚧 Pending |
+| GATK HaplotypeCaller | 🚧 Pending |
+| Octopus | 🚧 Pending |
+| Consensus Variant Engine | 🚧 Pending |
+| Variant Filtering | 🚧 Pending |
+| Annotation | 🚧 Pending |
+| Clinical ACMG Engine | 🚧 Pending |
+| Clinical Reporting | 🚧 Pending |
 
-See [implementation status](docs/implementation-status.md) and the
-[architecture](Architecture.md) for the authoritative boundaries.
+The architecture is implemented incrementally.
 
-## Supported scope
+Every module must pass:
 
-- Human nuclear germline SNVs and small indels
-- Paired-end short-read WGS and hybrid-capture WES
-- Illumina and validated GeneMind Phred+33 FASTQ
+- scientific review
+- implementation review
+- unit tests
+- integration tests
+- smoke tests
+- production validation
+
+before development continues.
+
+---
+
+# Supported Scope
+
+ClinicalSuite V2 currently supports:
+
+- Human nuclear germline SNVs
+- Human nuclear germline small indels
+- Paired-end Illumina-compatible sequencing
+- Whole Genome Sequencing
+- Whole Exome Sequencing
+- Broad GRCh38 Full Analysis Set + Decoy + HLA
 - One sample per analysis
-- Broad `GRCh38_full_analysis_set_plus_decoy_hla.fa` exclusively
 
-Somatic, mosaic, long-read, RNA, CNV, structural-variant, repeat-expansion,
-mitochondrial, pharmacogenomic, and HLA-typing analyses are out of scope.
+Current release intentionally excludes:
 
-## Requirements
+- Somatic analysis
+- Structural variants
+- CNVs
+- Repeat expansions
+- Mitochondrial variants
+- RNA sequencing
+- Long-read sequencing
+- Oxford Nanopore
+- PacBio
+- Pharmacogenomics
+- HLA typing
+
+These workflows will be implemented independently in future ClinicalSuite
+projects.
+
+---
+
+# Requirements
+
+ClinicalSuite requires:
 
 - Linux x86-64
-- Bash 4.4 or newer
+- Bash ≥ 4.4
 - Mamba
+- Conda
 - conda-pack
-- ShellCheck for development validation
-- Git and standard POSIX utilities
+- Git
+- Standard POSIX utilities
 
-The locked production reference and BWA-MEM2 indexes are external inputs. No
-reference genome or annotation database is downloaded during runtime setup.
+Development validation additionally requires:
 
-## Install the runtime
+- ShellCheck
 
-Build, verify, freeze, and pack all environments:
+No reference genome, annotation database, trained model, VEP cache or plugin
+is downloaded automatically.
+
+All scientific resources remain external and version controlled.
+
+---
+
+# Runtime Installation
+
+ClinicalSuite environments are built using Mamba.
+
+Build every environment:
 
 ```bash
 MAMBA_BIN=/path/to/mamba \
@@ -72,225 +190,862 @@ CONDA_PACK_BIN=/path/to/conda-pack \
 ./envs/build.sh
 ```
 
-The environment set is deliberately split where upstream constraints conflict:
+The runtime is divided into independent environments.
 
-| Environment | Primary software |
-|---|---|
-| `qc` | FastQC 0.12.1, fastp 1.3.6, MultiQC 1.35 |
-| `alignment` | BWA-MEM2 2.3, Samtools 1.24, Picard 3.4.0, mosdepth 0.3.14, GATK 4.6.2.0 |
-| `variant` | GATK 4.6.2.0, bcftools/HTSlib 1.24, Samtools 1.24 |
-| `deepvariant` | DeepVariant 1.10.0, CPU TensorFlow 2.11.1 |
-| `octopus` | Octopus 0.7.4 |
-| `annotation` | Ensembl VEP 116.0 runtime only |
-| `report` | Python 3.12.12 and pinned reporting libraries |
+| Environment | Purpose |
+|--------------|---------|
+| qc | FastQC, fastp, MultiQC |
+| alignment | BWA-MEM2, Samtools, Picard, Mosdepth |
+| variant | GATK, bcftools, HTSlib, vt |
+| deepvariant | DeepVariant runtime |
+| octopus | Octopus runtime |
+| annotation | VEP and annotation software |
+| report | Python and reporting libraries |
 
-DeepVariant, GATK, and Octopus cannot safely share one prefix because their
-Java and HTSlib constraints differ. The extra isolation is a packaging detail;
-the variant-calling module interfaces do not change.
+The separation is intentional.
 
-For each environment, setup produces:
+Different tools require incompatible versions of Java, HTSlib or Python.
 
-- `envs/NAME.lock` — `mamba list --explicit` reconstruction lock;
-- `envs/NAME.yml` — resolved, human-readable environment export;
-- `envs/NAME.tar.gz` — relocatable deployment archive;
-- `envs/archive_checksums.sha256` — archive integrity manifest; and
-- `envs/environment_validation_report.txt` — activation/tool validation.
+Independent environments maximize reproducibility while minimizing dependency
+conflicts.
 
-Prefixes and archives are local deployment artifacts and are not committed to
-Git. Locks, YAML specifications, checksums, and reports are traceability files.
+After validation every environment produces:
 
-### Deploy a packed environment
+- explicit package lock
+- environment.yml
+- conda-pack archive
+- SHA256 checksum
+- validation report
 
-```bash
-mkdir -p /opt/clinicalsuite/envs/alignment
-tar -xzf alignment.tar.gz -C /opt/clinicalsuite/envs/alignment
-/opt/clinicalsuite/envs/alignment/bin/conda-unpack
-```
+Installed environments are deployment artifacts and are never committed to Git.
 
-Install all archives beneath the configured `ENV_DIR` using their exact names.
+Only:
 
-## Configuration
+- lock files
+- YAML specifications
+- validation reports
+- checksums
 
-Copy the examples and edit site-specific paths:
+are version controlled.
+
+# Configuration
+
+ClinicalSuite uses three validated configuration layers.
+
+1. **Clinical configuration**
+
+Contains site-specific settings such as:
+
+- reference paths
+- database paths
+- thread counts
+- memory limits
+- runtime options
+- environment locations
+
+Example:
 
 ```bash
 cp config/clinical.conf.example config/clinical.conf
+```
+
+---
+
+2. **Sample manifest**
+
+Contains one sample per row.
+
+Example:
+
+```bash
 cp config/samples.tsv.example config/samples.tsv
 ```
 
-Important runtime keys:
+Each sample defines:
+
+- Sample ID
+- Assay (WGS/WES)
+- Platform (ILLUMINA / GENEMIND)
+- FASTQ R1
+- FASTQ R2
+- Read Group
+- Library
+- Platform Unit
+- Sequencing Center
+- Expected sex chromosome complement
+- Capture intervals (WES)
+- Reportable intervals
+
+---
+
+3. **Reference & Database manifests**
+
+ClinicalSuite validates every external resource before analysis.
+
+These manifests include:
+
+- filename
+- version
+- release
+- checksum
+- compatible reference genome
+- compatibility status
+
+No resource is accepted unless it matches the expected manifest.
+
+---
+
+# Runtime Configuration
+
+Important runtime variables include:
 
 ```ini
 ENV_DIR=/opt/clinicalsuite/envs
-MAMBA_BIN=/opt/conda/envs/mamba/bin/mamba
+
+MAMBA_BIN=/opt/conda/bin/mamba
+
 REFERENCE_DIR=/data/references/GRCh38
+
 REFERENCE_BUILD=GRCh38
 ```
 
-The pure-Bash parser rejects unknown/duplicate keys, empty required values,
-malformed types, invalid paths, invalid assay/platform names, missing FASTQs,
-duplicate sample IDs, and invalid read-group metadata. It reports all errors
-together. Exact resolved inputs are copied under `RUN_ID/resolved_config/`.
+The parser performs strict validation.
 
-See [configuration documentation](config/README.md).
+Rejected automatically:
 
-## Run
+- unknown keys
+- duplicate keys
+- missing required values
+- malformed values
+- missing FASTQs
+- duplicate sample IDs
+- invalid assay names
+- invalid platform names
+- invalid read groups
+- invalid reference paths
 
-Preflight only:
+All configuration errors are collected and reported together.
+
+No analysis begins until configuration validation succeeds.
+
+The fully resolved configuration is copied into every run directory
+for complete reproducibility.
+
+---
+
+# Running ClinicalSuite
+
+## Preflight only
 
 ```bash
 ./run.sh \
-  --config config/clinical.conf \
-  --samples config/samples.tsv \
-  --preflight-only
+    --config config/clinical.conf \
+    --samples config/samples.tsv \
+    --preflight-only
 ```
 
-Execute all currently implemented modules:
+---
+
+## Execute all implemented modules
 
 ```bash
 ./run.sh \
-  --config config/clinical.conf \
-  --samples config/samples.tsv
+    --config config/clinical.conf \
+    --samples config/samples.tsv
 ```
 
-The launcher runs:
+---
+
+## Execute a module range
+
+Examples
+
+```bash
+./run.sh --from qc
+```
+
+```bash
+./run.sh --from alignment
+```
+
+```bash
+./run.sh --from deepvariant
+```
+
+```bash
+./run.sh --to filtering
+```
+
+---
+
+# Runtime Flow
+
+ClinicalSuite automatically selects the correct Conda environment.
+
+Users never manually activate environments.
+
+Current execution order:
 
 ```text
-preflight -> qc environment -> alignment environment
+Preflight
+
+↓
+
+QC Environment
+
+↓
+
+Alignment Environment
+
+↓
+
+Coverage Environment
+
+↓
+
+Variant Environment
+
+↓
+
+DeepVariant Environment
+
+↓
+
+Octopus Environment
+
+↓
+
+Annotation Environment
+
+↓
+
+Report Environment
 ```
 
-It invokes the correct prefix without shell activation and propagates the
-module's exit status. Module scripts retain stable logical path arguments; the
-common runtime wrapper maps those paths to validated host resources.
+Every module executes inside its validated runtime.
 
-## Preflight
+The launcher automatically:
 
-Preflight aggregates configuration, manifest, runtime, environment-lock,
-executable, reference, database, permission, disk-space, and compatibility
-checks. It downloads or rebuilds nothing.
+- activates the environment
+- executes the module
+- validates completion
+- deactivates the environment
+- records provenance
 
-Resource requirements are stage-aware:
+---
 
-- through Module 13, annotation/ACMG resources are informational;
-- at Module 14, annotation resources become mandatory;
-- at Module 15, ACMG resources become mandatory.
+# Stage-aware Preflight
 
-Outputs are `preflight_report.txt` and `preflight.json`. Exit code `69` means a
-validation failure; `1` means an unexpected internal failure.
+Preflight validates the complete execution environment before any scientific
+analysis begins.
 
-## Reference contract
+Validation includes:
 
-ClinicalSuite V2 supports exactly:
+- configuration
+- sample manifest
+- runtime environments
+- package locks
+- software versions
+- references
+- indexes
+- databases
+- permissions
+- disk space
+- checksums
+- compatibility
+
+Preflight never:
+
+- downloads references
+- downloads databases
+- rebuilds environments
+- modifies resources
+
+It only validates.
+
+---
+
+# Stage-aware Resource Validation
+
+ClinicalSuite validates resources only when they become necessary.
+
+Through Module 13
+
+Annotation resources are informational.
+
+Modules 14–15
+
+Annotation databases become mandatory.
+
+Module 15
+
+Clinical ACMG resources become mandatory.
+
+This minimizes unnecessary failures during early pipeline development.
+
+---
+
+# Reference Contract
+
+ClinicalSuite supports exactly one production reference.
 
 ```text
 Broad GRCh38 Full Analysis Set + Decoy + HLA
+
 GRCh38_full_analysis_set_plus_decoy_hla.fa
 ```
 
-Use only the project-generated production BWA-MEM2 index. The reference must
-have its `.fai`, sequence dictionary, BWA-MEM2 index set, checksum inventory,
-and compatibility manifest. Other GRCh38 bundles and third-party prebuilt
-indexes are not supported. See [references/README.md](references/README.md).
+ClinicalSuite uses only:
 
-## Implemented workflows
+- project-generated BWA-MEM2 index
+- matching FASTA
+- matching FAI
+- matching sequence dictionary
+- matching checksum inventory
 
-### Module 6 — Quality control
+The following are NOT supported:
 
-For each pair, the module runs raw FastQC, fastp, processed FastQC, and MultiQC.
-It writes validated FASTQs, HTML/ZIP reports, JSON, logs, provenance, checksums,
-and a signed completion marker. The approved HG002 fixture contains 50,000
-paired reads and is for software testing only.
+- GRCh37
+- UCSC hg38
+- Ensembl Primary Assembly
+- T2T-CHM13
+- third-party prebuilt BWA indexes
 
-### Module 7 — Alignment and BAM processing
+Any mismatch between:
 
-The independently reviewed workflow is intentionally limited to:
+- FASTA
+- dictionary
+- index
+- checksum
 
-1. BWA-MEM2 alignment with explicit read group;
-2. SAM-to-BAM conversion and coordinate sorting;
-3. BAM indexing;
-4. Picard MarkDuplicates;
-5. GATK BaseRecalibrator;
-6. GATK ApplyBQSR and final indexing; and
-7. Samtools/Picard analysis-ready BAM validation.
+causes a preflight failure.
 
-Checkpoint signatures include configuration, FASTQs, reference/index identity,
-runtime lock, commands, and outputs. See [Module 7 review](validation/alignment-independent-review.md).
+---
 
-## Validation
+# Implemented Scientific Workflow
 
-Static validation:
+## Module 6 — Quality Control
+
+Workflow
+
+```text
+FASTQ
+
+↓
+
+FastQC
+
+↓
+
+fastp
+
+↓
+
+FastQC
+
+↓
+
+MultiQC
+```
+
+Outputs
+
+- validated FASTQ
+- FastQC HTML
+- FastQC ZIP
+- fastp HTML
+- fastp JSON
+- MultiQC HTML
+- provenance
+- checksums
+- signed checkpoint
+
+The HG002 50,000-read dataset is included only for software validation.
+
+It is NOT intended for analytical benchmarking.
+
+---
+
+## Module 7 — Alignment & BAM Processing
+
+Workflow
+
+```text
+FASTQ
+
+↓
+
+BWA-MEM2
+
+↓
+
+Samtools
+
+↓
+
+Coordinate Sorting
+
+↓
+
+Picard MarkDuplicates
+
+↓
+
+GATK BaseRecalibrator
+
+↓
+
+GATK ApplyBQSR
+
+↓
+
+Analysis-ready BAM
+```
+
+Validation includes:
+
+- BAM integrity
+- BAM index
+- duplicate metrics
+- BQSR completion
+- Samtools quickcheck
+- Samtools flagstat
+- Samtools stats
+- Picard ValidateSamFile
+
+Every completed module generates:
+
+- provenance
+- checksums
+- runtime report
+- signed checkpoint
+- validation report
+
+All outputs are written atomically.
+
+# Validation
+
+ClinicalSuite follows a validation-first development strategy.
+
+No module is considered complete until it passes:
+
+- Bash syntax validation
+- ShellCheck
+- Unit tests
+- Integration tests
+- Smoke tests
+- Real execution
+- Scientific review
+- Documentation review
+
+---
+
+## Static Validation
 
 ```bash
-find bin config envs references tests validation -type f -name '*.sh' -print0 |
-  xargs -0 -n1 bash -n
-find bin config envs references tests validation -type f -name '*.sh' -print0 |
-  xargs -0 shellcheck
+find bin config envs references tests validation \
+    -type f -name '*.sh' -print0 |
+    xargs -0 -n1 bash -n
+
+find bin config envs references tests validation \
+    -type f -name '*.sh' -print0 |
+    xargs -0 shellcheck
+
 git diff --check
 ```
 
-Runtime and tests:
+---
+
+## Runtime Validation
 
 ```bash
-MAMBA_BIN=/path/to/mamba ./envs/validate.sh
-bash tests/unit/test_environment_build.sh
-bash tests/smoke/test_environment_system.sh --require-archives
+MAMBA_BIN=/path/to/mamba \
+./envs/validate.sh
+```
 
-for test in tests/unit/test_*.sh tests/integration/test_*.sh tests/smoke/test_*.sh; do
-  "$test"
+Execute all validation suites:
+
+```bash
+bash tests/unit/test_environment_build.sh
+
+bash tests/smoke/test_environment_system.sh
+
+for test in \
+tests/unit/test_*.sh \
+tests/integration/test_*.sh \
+tests/smoke/test_*.sh
+do
+    "$test"
 done
 ```
 
-Real-data smoke tests use `tests/data/fastq/HG002_test_R{1,2}.fastq.gz` and are
-software checks, not analytical benchmarking. Full-reference BWA-MEM2 loading
-requires production-class RAM and must be completed on the target HPC.
+---
 
-## Repository layout
+## Production Validation
+
+ClinicalSuite validation uses:
+
+- GIAB HG002
+- GIAB HG003
+- GIAB HG004
+- Broad GRCh38 Full Analysis Set + Decoy + HLA
+- Production BWA-MEM2 indexes
+- Real Illumina-compatible FASTQ
+
+The included 50,000-read HG002 subset is intended only for software validation.
+
+Clinical performance validation must always be performed using complete,
+production-scale datasets.
+
+---
+
+# Development Roadmap
+
+## Completed
+
+| Module | Status |
+|----------|---------|
+| Repository Skeleton | ✅ |
+| Configuration | ✅ |
+| Common Bash Library | ✅ |
+| Conda Runtime | ✅ |
+| Preflight | ✅ |
+| Quality Control | ✅ |
+| Alignment & BAM Processing | ✅ |
+
+---
+
+## Planned
+
+### Module 8
+
+Coverage Analysis
+
+Tools
+
+- Mosdepth
+- Picard CollectHsMetrics (WES)
+
+Outputs
+
+- Coverage reports
+- Low coverage intervals
+- Coverage statistics
+
+---
+
+### Module 9
+
+DeepVariant
+
+Official DeepVariant WGS/WES models
+
+Outputs
+
+- Raw VCF
+- Filtered VCF
+
+---
+
+### Module 10
+
+GATK HaplotypeCaller
+
+Outputs
+
+- Raw VCF
+- Filtered VCF
+
+---
+
+### Module 11
+
+Octopus
+
+Outputs
+
+- Raw VCF
+- Filtered VCF
+
+---
+
+### Module 12
+
+Consensus Variant Engine
+
+The ClinicalSuite Consensus Engine is the central innovation of the pipeline.
+
+This is **not** a VCF merge.
+
+The workflow performs:
 
 ```text
-.
-├── bin/          module entry points and common Bash runtime
-├── config/       examples, schemas, and pure-Bash parser
-├── envs/         Mamba specs, locks, activation, validation, packing
-├── references/   external-reference contract and preparation helper
-├── databases/    external database contract (no bundled data)
-├── docs/         architecture support and operations
-├── tests/        unit, integration, smoke, and approved HG002 fixture
-└── validation/   reports, fixtures, and expected output
+Caller VCFs
+
+↓
+
+Variant Normalization
+
+↓
+
+Variant Harmonization
+
+↓
+
+Evidence Aggregation
+
+↓
+
+Conflict Resolution
+
+↓
+
+Confidence Assessment
+
+↓
+
+Consensus Variant Set
 ```
 
-Patient data, run outputs, references, databases, installed prefixes, and packed
-archives are excluded from source control.
+The engine is deterministic.
 
-## Exit codes and safety
+No majority voting.
 
-| Code | Meaning |
-|---:|---|
-| 0 | Success |
-| 64 | Invalid command-line usage |
-| 69 | Validation/preflight failure or unavailable required input |
-| 1 | Unexpected internal/tool error |
+No machine learning.
 
-Scripts use strict Bash mode, atomic outputs, signal cleanup, explicit error
-propagation, plain-text logs, checksums, provenance, and content-aware resume
-markers. ClinicalSuite never infers missing sample metadata and never downloads
-external scientific resources during analysis.
+No AI.
 
-## Documentation
+Every decision preserves provenance and remains fully explainable.
 
-- [Architecture](Architecture.md)
-- [Operations](docs/operations.md)
-- [Installation](docs/installation.md)
-- [Deployment](docs/deployment.md)
-- [Validation plan](docs/validation-plan.md)
-- [Environment runtime](envs/README.md)
-- [Configuration](config/README.md)
-- [Preflight](docs/preflight.md)
-- [Quality control](docs/quality-control.md)
-- [Alignment](docs/alignment.md)
-- [Scientific decisions](docs/scientific-decisions.md)
-- [Implementation status](docs/implementation-status.md)
+---
 
-## License
+### Module 13
 
-ClinicalSuite's project license does not replace or relicense third-party tools.
-Their upstream licenses and redistribution terms apply independently.
+Variant Filtering
+
+Filtering combines:
+
+- caller-native filters
+- validated technical filters
+- consensus confidence
+- reportable regions
+- coverage status
+
+Every filter is preserved.
+
+Variants are never silently discarded.
+
+---
+
+### Module 14
+
+Clinical Annotation
+
+ClinicalSuite uses
+
+Ensembl VEP
+
+with open annotation resources.
+
+Annotation sources include:
+
+- ClinVar
+- ClinGen
+- gnomAD
+- dbSNP
+- HPO
+- PanelApp
+- MANE
+- APPRIS
+- RefSeq
+- Ensembl
+- HGNC
+- REVEL
+- SpliceAI
+- CADD
+- LOFTEE
+- dbNSFP
+- GERP++
+- phyloP
+
+Optional resources
+
+- OMIM
+- GeneReviews
+- DECIPHER
+- Orphanet
+
+All databases remain external.
+
+Nothing is bundled into ClinicalSuite.
+
+---
+
+### Module 15
+
+ClinicalSuite ACMG Rule Engine
+
+ClinicalSuite implements a native, rule-based ACMG/AMP interpretation engine.
+
+The engine evaluates every ACMG criterion independently.
+
+Workflow
+
+```text
+Annotated Variant
+
+↓
+
+Evidence Collection
+
+↓
+
+Criterion Evaluation
+
+↓
+
+Evidence Ledger
+
+↓
+
+Official ACMG Combining Rules
+
+↓
+
+Preliminary Classification
+```
+
+The engine:
+
+- is fully deterministic
+- is fully explainable
+- preserves provenance
+- records every applied criterion
+- records every rejected criterion
+- records supporting evidence
+
+No machine learning.
+
+No Bayesian scoring.
+
+No proprietary algorithms.
+
+No black-box pathogenicity scores.
+
+The engine follows the official ACMG/AMP guidelines together with ClinGen
+recommendations.
+
+Final classification remains subject to expert clinical review.
+
+---
+
+### Module 16
+
+Clinical Reporting
+
+ClinicalSuite generates:
+
+- Clinical Report
+- Technical Report
+- QC Report
+- Coverage Report
+- Variant Summary
+- Consensus Report
+- Provenance Report
+
+Every report records:
+
+- software versions
+- package versions
+- reference version
+- database versions
+- runtime
+- parameters
+- checksums
+
+ensuring complete reproducibility.
+
+---
+
+# Repository Structure
+
+```text
+ClinicalSuite/
+
+├── bin/
+├── config/
+├── envs/
+├── references/
+├── databases/
+├── docs/
+├── tests/
+├── validation/
+├── Architecture.md
+├── README.md
+├── CHANGELOG.md
+├── VERSION
+└── run.sh
+```
+
+Patient data, run outputs, references, databases, caches,
+models and packed environments are intentionally excluded
+from version control.
+
+---
+
+# Documentation
+
+Primary project documents
+
+- Architecture.md
+- README.md
+- CHANGELOG.md
+
+Technical documentation
+
+- Operations
+- Installation
+- Deployment
+- Validation Plan
+- Scientific Decisions
+- Configuration
+- Runtime
+- Preflight
+- Quality Control
+- Alignment
+
+These documents define the authoritative behavior of ClinicalSuite.
+
+---
+
+# License
+
+ClinicalSuite itself is released as open-source software.
+
+Third-party software retains its original licenses.
+
+ClinicalSuite intentionally relies on openly available tools and databases
+whenever possible.
+
+References, annotation databases, trained models and plugins remain external,
+versioned resources supplied by the deploying laboratory.
+
+---
+
+# Acknowledgements
+
+ClinicalSuite follows recommendations and best practices from:
+
+- ACMG
+- AMP
+- ClinGen
+- GA4GH
+- CAP
+- GIAB
+- Broad Institute
+- Ensembl
+- NCBI
+
+The project aims to provide a transparent, reproducible and clinically
+oriented framework for human germline variant discovery while remaining fully
+open, maintainable and scientifically rigorous.
