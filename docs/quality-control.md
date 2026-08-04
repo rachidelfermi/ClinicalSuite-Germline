@@ -14,7 +14,7 @@ The launcher invokes `bin/qc.sh`, which:
 
 1. reuses the Module 2 parser and Module 3 runtime helpers;
 2. validates the selected `qc.conf` assay profile;
-3. verifies the pinned `qc.sif` image and computes a complete input signature;
+3. verifies the pinned `qc` environment lock and computes a complete input signature;
 4. runs FastQC on both raw FASTQs;
 5. runs fastp with adapter trimming, poly-G trimming, quality filtering, and
    length filtering disabled, discarding its sequence stream and retaining only
@@ -29,7 +29,7 @@ The launcher invokes `bin/qc.sh`, which:
 `BLOCK` exits with status 69. `REVIEW` is a successful software execution that
 requires downstream operator review. An existing output is reused only when its
 signature matches the module code, common library, parser, configuration,
-manifest, profile, container, and both FASTQ checksums.
+manifest, profile, environment lock, and both FASTQ checksums.
 
 ## Assay profile
 

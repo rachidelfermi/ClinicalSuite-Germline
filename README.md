@@ -1,285 +1,142 @@
-# ClinicalSuite V2
+# ClinicalSuite Germline V2
 
-ClinicalSuite is a containerized, clinically oriented framework for reproducible
-human germline small-variant analysis from paired-end short-read whole-genome
-sequencing (WGS) and whole-exome sequencing (WES).
+ClinicalSuite is a reproducible, clinically oriented Bash framework for
+paired-end human germline WGS/WES. It currently executes preflight, quality
+control, alignment, duplicate marking, and BQSR (Modules 5–7). Later discovery,
+annotation, interpretation, and reporting modules remain staged work.
 
-The V2 implementation is being developed as a sequence of independently tested
-modules. The repository currently provides the validated configuration,
-shared-runtime, Apptainer-container, preflight, and paired-end FASTQ
-quality-control modules. Module 7 alignment/BAM processing has been independently
-rewritten and has passed unit and real-container integration testing; its full
-HG002 production-reference validation is in progress. Later analysis modules
-are not yet operational.
+> Clinical status: this software is not a validated clinical assay or medical
+> device. Each laboratory must perform end-to-end, assay-specific validation in
+> its production environment before patient reporting.
 
-> [!CAUTION]
-> ClinicalSuite V2 is development software. It is not a validated clinical
-> assay, diagnostic product, or medical device. It must not be used for patient
-> care until the complete workflow has undergone laboratory-specific analytical
-> validation, accreditation review, change control, and qualified expert review.
+## Runtime migration
 
-Current version: **2.0.0-dev**
+ClinicalSuite uses isolated Conda environments because the production HPC does
+not permit Apptainer user namespaces or setuid execution. This migration changes
+only runtime packaging. Scientific commands, module interfaces, ordering,
+configuration, checkpoints, provenance, and output contracts are unchanged.
 
-## Table of contents
-
-- [Project status](#project-status)
-- [Design goals](#design-goals)
-- [Supported scope](#supported-scope)
-- [Architecture](#architecture)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Preflight validation](#preflight-validation)
-- [Container system](#container-system)
-- [Quality control](#quality-control)
-- [External references and databases](#external-references-and-databases)
-- [Testing](#testing)
-- [HG002 QC test fixture](#hg002-qc-test-fixture)
-- [Repository layout](#repository-layout)
-- [Runtime outputs](#runtime-outputs)
-- [Exit codes](#exit-codes)
-- [Documentation](#documentation)
-- [Data safety](#data-safety)
-- [Development roadmap](#development-roadmap)
+- Mamba is the only permitted installer (`mamba create` / `mamba install`).
+- Users never activate environments; launchers select them automatically.
+- Every direct package is version-pinned.
+- Every validated prefix has an explicit lock and resolved YAML.
+- `conda-pack` archives are produced only after validation succeeds.
+- References, models, caches, plugins, and databases remain external.
 
 ## Project status
 
-| Module | Status | Evidence |
-| --- | --- | --- |
-| 1. Repository skeleton | Complete | [Validation record](validation/repository-skeleton.md) |
-| 2. Configuration system | Complete | [Validation record](validation/configuration-system.md) |
-| 3. Common Bash library | Complete | [Validation record](validation/common-bash-library.md) |
-| 4. Apptainer container system | Complete | [Container validation report](containers/container_validation_report.txt) |
-| 5. Preflight validation | Complete | [Validation record](validation/preflight.md) |
-| 6. Quality control | Complete | [Validation record](validation/quality-control.md) |
-| 7. Alignment and BAM processing | Revalidation blocked by validation-host RAM | [Independent review](validation/alignment-independent-review.md) |
-| 8–16. Scientific and reporting modules | Pending | Not implemented |
-| 17. Integration testing | Pending | Module-level integration tests exist; complete workflow pending |
-| 18. End-to-end validation | Pending | Not started |
+| Module | Status |
+|---|---|
+| 1 Repository skeleton | Complete |
+| 2 Configuration system | Complete |
+| 3 Common Bash library | Complete |
+| 4 Conda runtime system | Migrated; validation evidence in `envs/` |
+| 5 Stage-aware preflight | Complete; migrated to Conda checks |
+| 6 Quality control | Complete; Conda revalidation included |
+| 7 Alignment and BAM processing | Independently rewritten; full-reference validation is RAM constrained on the development host |
+| 8–16 downstream scientific modules | Pending |
 
-`run.sh` currently executes stage-aware mandatory preflight, Module 6 quality
-control, and Module 7 alignment/BAM processing. It stops before coverage,
-variant calling, annotation, interpretation, and reporting.
-
-The authoritative live status is maintained in
-[docs/implementation-status.md](docs/implementation-status.md).
-
-## Design goals
-
-- Fail before analysis when configuration, inputs, software, permissions, or
-  external resources are invalid.
-- Run scientific software exclusively through pinned Apptainer images.
-- Keep the host runtime small: Bash, Apptainer, and standard POSIX utilities.
-- Keep reference genomes, annotation databases, caches, plugins, and trained
-  models external to both Git and container images.
-- Preserve the exact resolved configuration and sample manifest used for a run.
-- Produce explicit logs, checksums, checkpoints, provenance, and validation
-  artifacts.
-- Keep scientific parameters in validated assay profiles rather than hidden in
-  scripts.
-- Aggregate validation errors so operators can correct all detected problems in
-  one pass.
+See [implementation status](docs/implementation-status.md) and the
+[architecture](Architecture.md) for the authoritative boundaries.
 
 ## Supported scope
 
-The approved initial V2 scope is:
+- Human nuclear germline SNVs and small indels
+- Paired-end short-read WGS and hybrid-capture WES
+- Illumina and validated GeneMind Phred+33 FASTQ
+- One sample per analysis
+- Broad `GRCh38_full_analysis_set_plus_decoy_hla.fa` exclusively
 
-- Human nuclear germline single-nucleotide variants and small indels
-- Paired-end short-read WGS
-- Hybrid-capture paired-end short-read WES
-- Illumina sequencing
-- GeneMind sequencing after separate assay-specific validation
-- Broad GRCh38 Full Analysis Set + Decoy + HLA
-  (`GRCh38_full_analysis_set_plus_decoy_hla.fa`) exclusively
-
-The following are outside the initial V2 scope:
-
-- Somatic or tumor/normal analysis
-- Copy-number variants and structural variants
-- Repeat expansions
-- Mitochondrial variant analysis
-- RNA sequencing
-- Long-read Oxford Nanopore or PacBio analysis
-- Methylation or single-cell analysis
-- Other reference assemblies
-
-See [Architecture.md](Architecture.md) for the complete scientific scope,
-decision record, and future module contracts.
-
-## Architecture
-
-```text
-clinical.conf + samples.tsv
-            |
-            v
-  Configuration validation
-            |
-            +--> immutable resolved_config/
-            |
-            v
-     Mandatory preflight
-       |      |      |
-       |      |      +--> references and databases
-       |      +---------> containers and checksums
-       +----------------> FASTQs, filesystem, permissions
-            |
-            v
-  Scientific modules 6–16
-       (under development)
-            |
-            v
- Integration and end-to-end validation
-```
-
-The runtime contract separates four concerns:
-
-1. **Source code** — Bash orchestration, schemas, definitions, and tests stored
-   in Git.
-2. **Software** — pinned, immutable Apptainer SIF images.
-3. **External resources** — versioned references, databases, caches, and models
-   mounted read-only.
-4. **Run state** — resolved configuration, logs, checkpoints, intermediate
-   files, results, and provenance stored below the configured run root.
-
-Docker is never required at runtime. Conda and Mamba environments are not part
-of the V2 runtime.
+Somatic, mosaic, long-read, RNA, CNV, structural-variant, repeat-expansion,
+mitochondrial, pharmacogenomic, and HLA-typing analyses are out of scope.
 
 ## Requirements
 
-### Runtime
-
-- Linux on `x86_64`
+- Linux x86-64
 - Bash 4.4 or newer
-- Apptainer
-- Standard utilities checked by preflight, including `awk`, `date`, `df`,
-  `dirname`, `find`, `grep`, `hostname`, `mktemp`, `mv`, `readlink`, `sed`,
-  `sha256sum`, `stat`, `uname`, and `wc`
+- Mamba
+- conda-pack
+- ShellCheck for development validation
+- Git and standard POSIX utilities
 
-The current container set was built and validated with:
+The locked production reference and BWA-MEM2 indexes are external inputs. No
+reference genome or annotation database is downloaded during runtime setup.
 
-```text
-Apptainer 1.5.2
-Architecture linux/amd64
-```
+## Install the runtime
 
-### Container builds
-
-Container builds additionally require:
-
-- Network access to the pinned upstream OCI and source locations
-- `curl`
-- Apptainer fakeroot support or equivalent build privileges
-- Sufficient storage for seven SIF images and the reusable build cache
-
-No reference genome or annotation database is downloaded by the container
-builder.
-
-## Installation
-
-Clone the repository:
+Build, verify, freeze, and pack all environments:
 
 ```bash
-git clone git@github.com:rachidelfermi/ClinicalSuite.git
-cd ClinicalSuite
+MAMBA_BIN=/path/to/mamba \
+CONDA_PACK_BIN=/path/to/conda-pack \
+./envs/build.sh
 ```
 
-Confirm the host tools:
+The environment set is deliberately split where upstream constraints conflict:
+
+| Environment | Primary software |
+|---|---|
+| `qc` | FastQC 0.12.1, fastp 1.3.6, MultiQC 1.35 |
+| `alignment` | BWA-MEM2 2.3, Samtools 1.24, Picard 3.4.0, mosdepth 0.3.14, GATK 4.6.2.0 |
+| `variant` | GATK 4.6.2.0, bcftools/HTSlib 1.24, Samtools 1.24 |
+| `deepvariant` | DeepVariant 1.10.0, CPU TensorFlow 2.11.1 |
+| `octopus` | Octopus 0.7.4 |
+| `annotation` | Ensembl VEP 116.0 runtime only |
+| `report` | Python 3.12.12 and pinned reporting libraries |
+
+DeepVariant, GATK, and Octopus cannot safely share one prefix because their
+Java and HTSlib constraints differ. The extra isolation is a packaging detail;
+the variant-calling module interfaces do not change.
+
+For each environment, setup produces:
+
+- `envs/NAME.lock` — `mamba list --explicit` reconstruction lock;
+- `envs/NAME.yml` — resolved, human-readable environment export;
+- `envs/NAME.tar.gz` — relocatable deployment archive;
+- `envs/archive_checksums.sha256` — archive integrity manifest; and
+- `envs/environment_validation_report.txt` — activation/tool validation.
+
+Prefixes and archives are local deployment artifacts and are not committed to
+Git. Locks, YAML specifications, checksums, and reports are traceability files.
+
+### Deploy a packed environment
 
 ```bash
-bash --version
-apptainer --version
-sha256sum --version
+mkdir -p /opt/clinicalsuite/envs/alignment
+tar -xzf alignment.tar.gz -C /opt/clinicalsuite/envs/alignment
+/opt/clinicalsuite/envs/alignment/bin/conda-unpack
 ```
 
-Build and validate all pinned containers:
-
-```bash
-./containers/build.sh
-```
-
-The build system reuses verified downloads from `containers/.build/`. Generated
-SIF files remain local deployment artifacts and are intentionally excluded from
-Git.
-
-Confirm the launcher interface:
-
-```bash
-./run.sh --help
-```
-
-ClinicalSuite does not currently install reference data or databases. Prepare
-those resources separately according to the documented manifest contracts
-before running preflight.
+Install all archives beneath the configured `ENV_DIR` using their exact names.
 
 ## Configuration
 
-ClinicalSuite accepts two non-executable, allowlisted input files:
-
-- `clinical.conf` — operational paths, resource limits, and the approved assay
-  profile.
-- `samples.tsv` — fixed-schema sample and paired FASTQ metadata.
-
-Create local working copies:
+Copy the examples and edit site-specific paths:
 
 ```bash
 cp config/clinical.conf.example config/clinical.conf
 cp config/samples.tsv.example config/samples.tsv
 ```
 
-Edit every site-specific path and all sample metadata:
+Important runtime keys:
 
-```bash
-${EDITOR:-vi} config/clinical.conf config/samples.tsv
+```ini
+ENV_DIR=/opt/clinicalsuite/envs
+MAMBA_BIN=/opt/conda/envs/mamba/bin/mamba
+REFERENCE_DIR=/data/references/GRCh38
+REFERENCE_BUILD=GRCh38
 ```
 
-Validate without creating run files:
+The pure-Bash parser rejects unknown/duplicate keys, empty required values,
+malformed types, invalid paths, invalid assay/platform names, missing FASTQs,
+duplicate sample IDs, and invalid read-group metadata. It reports all errors
+together. Exact resolved inputs are copied under `RUN_ID/resolved_config/`.
 
-```bash
-./config/validate.sh \
-  --config config/clinical.conf \
-  --samples config/samples.tsv \
-  --check-only
-```
+See [configuration documentation](config/README.md).
 
-Validate and create the immutable resolved configuration:
+## Run
 
-```bash
-./config/validate.sh \
-  --config config/clinical.conf \
-  --samples config/samples.tsv
-```
-
-On success, ClinicalSuite writes:
-
-```text
-RUN_ROOT/RUN_ID/resolved_config/
-├── clinical.conf
-└── samples.tsv
-```
-
-These read-only files contain normalized absolute paths and represent the exact
-configuration supplied to downstream modules. An existing resolved
-configuration is never silently overwritten.
-
-The parser:
-
-- rejects unknown and duplicate keys;
-- rejects missing or empty mandatory values;
-- validates integers, enums, identifiers, permissions, and paths;
-- resolves configuration paths relative to `clinical.conf`;
-- resolves FASTQ and interval paths relative to `samples.tsv`;
-- validates the exact sample-manifest schema;
-- rejects duplicate sample IDs and read-group IDs;
-- requires paired, readable FASTQ files;
-- requires explicit assay, platform, read-group, and interval metadata; and
-- never sources or evaluates configuration as shell code.
-
-All supported keys, defaults, and validation rules are documented in
-[config/README.md](config/README.md).
-
-## Preflight validation
-
-Preflight is the mandatory first runtime module:
+Preflight only:
 
 ```bash
 ./run.sh \
@@ -288,356 +145,152 @@ Preflight is the mandatory first runtime module:
   --preflight-only
 ```
 
-An optional report-directory override is available:
+Execute all currently implemented modules:
 
 ```bash
 ./run.sh \
   --config config/clinical.conf \
-  --samples config/samples.tsv \
-  --preflight-only \
-  --preflight-dir /absolute/path/to/preflight
+  --samples config/samples.tsv
 ```
 
-Preflight performs aggregated checks for:
-
-- Configuration and sample-manifest validity
-- Bash, Apptainer, and required host utilities
-- FASTQ readability, structure, pairing, and mate identifiers
-- Output and scratch permissions
-- Configurable free-space requirements
-- Presence and SHA-256 integrity of every SIF required through the selected stage
-- Executable availability and locked tool-version compatibility
-- The locked Broad GRCh38 Full Analysis Set + Decoy + HLA FASTA, its exact
-  indexes, dictionary, ALT metadata, and interval files
-- Stage-required references, databases, caches, plugins, and trained models
-- Assembly and reference/database compatibility
-- Required checksums and external-resource manifest consistency
-
-It does not start scientific analysis and does not download missing resources.
-`bin/preflight.sh --stage STAGE` selects the validation boundary. The current
-default is `VARIANT_FILTERING` (Module 13), so annotation and ACMG resources are
-reported informationally and do not block execution.
-
-Successful or failed validation produces atomic reports:
+The launcher runs:
 
 ```text
-RUN_ROOT/RUN_ID/preflight/
-├── preflight.json
-├── preflight.log
-└── preflight_report.txt
+preflight -> qc environment -> alignment environment
 ```
 
-See [docs/preflight.md](docs/preflight.md) for mandatory resource identifiers
-and report semantics.
+It invokes the correct prefix without shell activation and propagates the
+module's exit status. Module scripts retain stable logical path arguments; the
+common runtime wrapper maps those paths to validated host resources.
 
-## Container system
+## Preflight
 
-ClinicalSuite uses seven runtime images:
+Preflight aggregates configuration, manifest, runtime, environment-lock,
+executable, reference, database, permission, disk-space, and compatibility
+checks. It downloads or rebuilds nothing.
 
-| Image | Pinned runtime |
-| --- | --- |
-| `qc.sif` | FastQC 0.12.1, fastp 1.3.6, MultiQC 1.35 |
-| `alignment.sif` | BWA-MEM2 2.3 asset, Samtools/HTSlib 1.24, Picard 3.4.0, mosdepth 0.3.14 |
-| `gatk.sif` | GATK 4.6.2.0, bcftools/HTSlib 1.24 |
-| `octopus.sif` | Octopus 0.7.4 |
-| `deepvariant.sif` | Official DeepVariant 1.10.0 CPU runtime |
-| `annotation.sif` | Ensembl VEP 116.0 runtime |
-| `report.sif` | CPython 3.12.12 with pinned reporting libraries |
+Resource requirements are stage-aware:
 
-Build selected images:
+- through Module 13, annotation/ACMG resources are informational;
+- at Module 14, annotation resources become mandatory;
+- at Module 15, ACMG resources become mandatory.
 
-```bash
-./containers/build.sh --no-validate qc alignment
-```
+Outputs are `preflight_report.txt` and `preflight.json`. Exit code `69` means a
+validation failure; `1` means an unexpected internal failure.
 
-Validate an existing complete image set without rebuilding:
+## Reference contract
 
-```bash
-./containers/build.sh --validate-only
-```
-
-Verify deployment checksums:
-
-```bash
-(cd containers && sha256sum --check checksums.sha256)
-```
-
-Important container metadata:
-
-- [containers/versions.lock](containers/versions.lock) records component
-  versions, immutable sources, digests, and licenses.
-- [containers/checksums.sha256](containers/checksums.sha256) records the current
-  local deployment-image hashes.
-- [containers/container_validation_report.txt](containers/container_validation_report.txt)
-  records executable and version checks.
-- [docs/container-provenance.md](docs/container-provenance.md) records the
-  provenance review.
-
-`qc.sif` is a validated, stable Module 6 dependency. Quality-control
-orchestration must not change its tool versions or contents unless a critical
-software defect is discovered.
-
-## Quality control
-
-After preflight succeeds, `run.sh` executes Module 6 through `bin/qc.sh`.
-For every paired-end sample, the module runs raw-read FastQC, generates a
-fastp report in explicitly non-modifying pass-through mode, and aggregates the
-reports with MultiQC. Original FASTQs remain unchanged and are exposed to the
-next module through checksummed symbolic links.
-
-QC thresholds and `BLOCK`/`REVIEW` policies come from the validated assay
-profile, not the orchestration script. A matching `.complete` signature makes
-reruns resumable; changed configuration, profile, container, or FASTQ content
-is rejected rather than silently mixed with an existing result.
-
-See [docs/quality-control.md](docs/quality-control.md) for the output contract
-and [validation/quality-control.md](validation/quality-control.md) for the
-HG002 software-validation result.
-
-## Alignment and BAM processing
-
-Module 7 consumes only Module 6's checksum-verified FASTQ handoff. It performs
-BWA-MEM2 alignment, coordinate sorting and indexing, Picard duplicate marking,
-GATK BaseRecalibrator/ApplyBQSR, final indexing, and strict analysis-ready BAM
-validation. It uses the locked Broad GRCh38 Full Analysis Set + Decoy + HLA and
-assembly-matched known-site resources declared in the external reference
-manifest.
-
-See [docs/alignment.md](docs/alignment.md) for the execution/output contract and
-[validation/alignment-independent-review.md](validation/alignment-independent-review.md)
-for the independent scientific and software review.
-
-## External references and databases
-
-ClinicalSuite containers contain no reference genomes, annotation databases,
-VEP caches, plugins, truth sets, or trained calling models.
-
-Preflight expects versioned external manifests:
+ClinicalSuite V2 supports exactly:
 
 ```text
-REFERENCE_DIR/
-└── reference_manifest.tsv
-
-DATABASE_DIR/
-└── database_manifest.tsv
+Broad GRCh38 Full Analysis Set + Decoy + HLA
+GRCh38_full_analysis_set_plus_decoy_hla.fa
 ```
 
-Requirements are stage-aware. From alignment onward, preflight accepts only
-Broad GRCh38 Full Analysis Set + Decoy + HLA:
-`GRCh38_full_analysis_set_plus_decoy_hla.fa`, reference identity
-`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. Its exact indexes,
-reportable/capture intervals, variant-calling resources, caller containers, and
-matching DeepVariant model are mandatory at their first consuming stage.
-ClinVar, dbSNP, gnomAD, VEP cache, LOFTEE, SpliceAI, and dbNSFP remain external
-and become mandatory at Module 14. ACMG resources are deferred until Module 15;
-REVEL is optional at that stage.
+Use only the project-generated production BWA-MEM2 index. The reference must
+have its `.fai`, sequence dictionary, BWA-MEM2 index set, checksum inventory,
+and compatibility manifest. Other GRCh38 bundles and third-party prebuilt
+indexes are not supported. See [references/README.md](references/README.md).
 
-Resource rows carry the locked reference identity, assembly declaration, and
-checksum. Database rows also record the compatible FASTA SHA-256 so preflight
-can reject mixed reference bundles.
+## Implemented workflows
 
-ClinicalSuite never infers, downloads, replaces, or updates these resources
-during a run. Consult:
+### Module 6 — Quality control
 
-- [references/README.md](references/README.md)
-- [Reference preparation status](validation/reference-preparation.md)
-- [databases/README.md](databases/README.md)
-- [config/schemas/reference_manifest.schema.tsv](config/schemas/reference_manifest.schema.tsv)
-- [config/schemas/database_manifest.schema.tsv](config/schemas/database_manifest.schema.tsv)
+For each pair, the module runs raw FastQC, fastp, processed FastQC, and MultiQC.
+It writes validated FASTQs, HTML/ZIP reports, JSON, logs, provenance, checksums,
+and a signed completion marker. The approved HG002 fixture contains 50,000
+paired reads and is for software testing only.
 
-## Testing
+### Module 7 — Alignment and BAM processing
 
-Run syntax checks:
+The independently reviewed workflow is intentionally limited to:
 
-```bash
-find . -type f -name '*.sh' -not -path './containers/.build/*' \
-  -exec bash -n {} +
-```
+1. BWA-MEM2 alignment with explicit read group;
+2. SAM-to-BAM conversion and coordinate sorting;
+3. BAM indexing;
+4. Picard MarkDuplicates;
+5. GATK BaseRecalibrator;
+6. GATK ApplyBQSR and final indexing; and
+7. Samtools/Picard analysis-ready BAM validation.
 
-Run unit tests:
+Checkpoint signatures include configuration, FASTQs, reference/index identity,
+runtime lock, commands, and outputs. See [Module 7 review](validation/alignment-independent-review.md).
 
-```bash
-for test in tests/unit/test_*.sh; do
-  bash "$test"
-done
-```
+## Validation
 
-Run integration tests:
+Static validation:
 
 ```bash
-for test in tests/integration/test_*.sh; do
-  bash "$test"
-done
-```
-
-Run smoke tests:
-
-```bash
-for test in tests/smoke/test_*.sh; do
-  bash "$test"
-done
-```
-
-Run ShellCheck when it is installed:
-
-```bash
-find bin config containers tests validation -type f -name '*.sh' -print0 |
+find bin config envs references tests validation -type f -name '*.sh' -print0 |
+  xargs -0 -n1 bash -n
+find bin config envs references tests validation -type f -name '*.sh' -print0 |
   xargs -0 shellcheck
+git diff --check
 ```
 
-The container smoke test requires the complete local SIF deployment set.
-Configuration and preflight tests use isolated temporary fixtures and do not
-download references or databases.
-
-## HG002 QC test fixture
-
-The repository includes a small real paired-end Genome in a Bottle HG002
-fixture:
-
-```text
-tests/data/fastq/HG002_test_R1.fastq.gz
-tests/data/fastq/HG002_test_R2.fastq.gz
-```
-
-It contains exactly 50,000 synchronized read pairs from the official NIST
-Illumina 2 × 250 bp PCR-free WGS data. It exists only for unit, integration, and
-smoke testing. It must not be used for analytical validation, benchmarking, or
-clinical interpretation.
-
-Verify it with:
+Runtime and tests:
 
 ```bash
-(cd tests/data/fastq && sha256sum --check SHA256SUMS)
+MAMBA_BIN=/path/to/mamba ./envs/validate.sh
+bash tests/unit/test_environment_build.sh
+bash tests/smoke/test_environment_system.sh --require-archives
+
+for test in tests/unit/test_*.sh tests/integration/test_*.sh tests/smoke/test_*.sh; do
+  "$test"
+done
 ```
 
-Full provenance, accession identifiers, source URLs, publication, checksums,
-and the reproducible bounded-stream generator are documented in
-[tests/data/fastq/README.md](tests/data/fastq/README.md).
+Real-data smoke tests use `tests/data/fastq/HG002_test_R{1,2}.fastq.gz` and are
+software checks, not analytical benchmarking. Full-reference BWA-MEM2 loading
+requires production-class RAM and must be completed on the target HPC.
 
 ## Repository layout
 
 ```text
-ClinicalSuite/
-├── Architecture.md              # Approved V2 architecture and decisions
-├── VERSION                      # Development version
-├── run.sh                       # Preflight-first command-line entry point
-├── bin/
-│   ├── common.sh                # Shared Bash runtime library
-│   └── preflight.sh             # Aggregated environment validation
-├── config/
-│   ├── clinical.conf.example    # Configuration template
-│   ├── samples.tsv.example      # Sample-manifest template
-│   ├── parser.sh                # Pure-Bash parser and validator
-│   ├── validate.sh              # Configuration validation CLI
-│   └── schemas/                 # Configuration and manifest contracts
-├── containers/
-│   ├── build.sh                 # Reproducible image builder
-│   ├── validate.sh              # Runtime image validation
-│   ├── versions.lock            # Pinned software provenance
-│   ├── checksums.sha256         # Deployment SIF checksums
-│   ├── definitions/             # Apptainer definition files
-│   └── requirements/            # Locked runtime requirements
-├── references/                  # External-reference contract
-├── databases/                   # External-database contract
-├── docs/                        # Architecture and operational documentation
-├── tests/
-│   ├── data/                    # Approved non-patient test fixture
-│   ├── helpers/                 # Test fixture helpers
-│   ├── unit/
-│   ├── integration/
-│   └── smoke/
-└── validation/                  # Module validation records and fixtures
+.
+├── bin/          module entry points and common Bash runtime
+├── config/       examples, schemas, and pure-Bash parser
+├── envs/         Mamba specs, locks, activation, validation, packing
+├── references/   external-reference contract and preparation helper
+├── databases/    external database contract (no bundled data)
+├── docs/         architecture support and operations
+├── tests/        unit, integration, smoke, and approved HG002 fixture
+└── validation/   reports, fixtures, and expected output
 ```
 
-## Runtime outputs
+Patient data, run outputs, references, databases, installed prefixes, and packed
+archives are excluded from source control.
 
-The configured run root will contain immutable inputs, validation reports, and
-future module outputs:
-
-```text
-RUN_ROOT/
-└── RUN_ID/
-    ├── resolved_config/
-    │   ├── clinical.conf
-    │   └── samples.tsv
-    └── preflight/
-        ├── preflight.json
-        ├── preflight.log
-        └── preflight_report.txt
-```
-
-Later module directories will be added only when those modules are implemented
-and validated.
-
-## Exit codes
+## Exit codes and safety
 
 | Code | Meaning |
-| ---: | --- |
-| `0` | Requested validation completed successfully |
-| `1` | Unexpected internal or report-generation failure |
-| `64` | Command-line usage error |
-| `69` | Configuration, preflight, or unavailable-analysis validation failure |
+|---:|---|
+| 0 | Success |
+| 64 | Invalid command-line usage |
+| 69 | Validation/preflight failure or unavailable required input |
+| 1 | Unexpected internal/tool error |
 
-No downstream module may run after a preflight exit code other than `0`.
+Scripts use strict Bash mode, atomic outputs, signal cleanup, explicit error
+propagation, plain-text logs, checksums, provenance, and content-aware resume
+markers. ClinicalSuite never infers missing sample metadata and never downloads
+external scientific resources during analysis.
 
 ## Documentation
 
 - [Architecture](Architecture.md)
-- [Implementation status](docs/implementation-status.md)
-- [Scientific decision record](docs/scientific-decisions.md)
-- [Validation plan](docs/validation-plan.md)
 - [Operations](docs/operations.md)
-- [Configuration system](config/README.md)
-- [Common Bash library](bin/README.md)
-- [Container system](containers/README.md)
-- [Container provenance](docs/container-provenance.md)
-- [Preflight validation](docs/preflight.md)
-- [Reference contract](references/README.md)
-- [Database contract](databases/README.md)
-- [Test strategy](tests/README.md)
-- [Changelog](CHANGELOG.md)
+- [Installation](docs/installation.md)
+- [Deployment](docs/deployment.md)
+- [Validation plan](docs/validation-plan.md)
+- [Environment runtime](envs/README.md)
+- [Configuration](config/README.md)
+- [Preflight](docs/preflight.md)
+- [Quality control](docs/quality-control.md)
+- [Alignment](docs/alignment.md)
+- [Scientific decisions](docs/scientific-decisions.md)
+- [Implementation status](docs/implementation-status.md)
 
-## Data safety
+## License
 
-- Never commit patient identifiers, sample manifests, local configuration,
-  FASTQs, BAM/CRAM files, VCFs, reports, credentials, or site paths.
-- Treat `.gitignore` as a convenience, not as a data-loss-prevention control.
-- Keep input data and external resources in access-controlled storage.
-- Mount reference and database resources read-only.
-- Preserve logs, resolved configuration, checksums, software versions, and
-  provenance according to the laboratory quality-management system.
-- Review every generated interpretation and report through an approved clinical
-  process.
-
-The bundled HG002 files are the only approved real human sequencing fixture in
-the repository.
-
-## Development roadmap
-
-Modules are implemented and validated in this order:
-
-1. Repository skeleton
-2. Configuration system
-3. Common Bash library
-4. Apptainer container system
-5. Preflight validation
-6. Quality control
-7. Alignment and BAM processing
-8. Coverage analysis
-9. DeepVariant
-10. GATK HaplotypeCaller
-11. Octopus
-12. Consensus engine
-13. Variant filtering
-14. Annotation
-15. ACMG/AMP decision support
-16. Reporting
-17. Integration tests
-18. End-to-end validation
-
-Each module must pass Bash syntax checks, ShellCheck, unit tests, integration or
-smoke tests as applicable, and `git diff --check` before the next module begins.
-Development stops at any failed release gate.
-
-Third-party software remains subject to its own license. Component sources and
-licenses are recorded in [containers/versions.lock](containers/versions.lock).
+ClinicalSuite's project license does not replace or relicense third-party tools.
+Their upstream licenses and redistribution terms apply independently.

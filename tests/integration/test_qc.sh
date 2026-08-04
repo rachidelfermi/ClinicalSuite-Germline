@@ -19,7 +19,7 @@ cleanup_test_root() {
 }
 trap cleanup_test_root EXIT
 
-mkdir -p "$TEST_ROOT"/{runs,references,databases,containers,profiles/test-wgs-v1,scratch,data,intervals}
+mkdir -p "$TEST_ROOT"/{runs,references,databases,envs,profiles/test-wgs-v1,scratch,data,intervals}
 printf '@read1/1\nACGTACGT\n+\n!!!!!!!!\n' | gzip -n >"$TEST_ROOT/data/test_R1.fastq.gz"
 printf '@read1/2\nTGCATGCA\n+\n!!!!!!!!\n' | gzip -n >"$TEST_ROOT/data/test_R2.fastq.gz"
 printf 'chr1\t0\t8\n' >"$TEST_ROOT/intervals/reportable.bed"
@@ -38,11 +38,11 @@ RUN_ID=QC_INTEGRATION
 RUN_ROOT=runs
 REFERENCE_DIR=references
 DATABASE_DIR=databases
-CONTAINER_DIR=$REPOSITORY_ROOT/containers
+ENV_DIR=$REPOSITORY_ROOT/envs
 ASSAY_PROFILE_DIR=profiles
 ASSAY_PROFILE=test-wgs-v1
 SCRATCH_DIR=scratch
-APPTAINER_BIN=/usr/bin/apptainer
+MAMBA_BIN=${MAMBA_BIN:-/home/bio/anaconda3/envs/mamba/bin/mamba}
 THREADS=2
 MIN_RUN_FREE_GB=0
 MIN_SCRATCH_FREE_GB=0

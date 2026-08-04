@@ -16,11 +16,11 @@ readonly -a CLINICAL_CONFIG_KEYS=(
     RUN_ROOT
     REFERENCE_DIR
     DATABASE_DIR
-    CONTAINER_DIR
+    ENV_DIR
     ASSAY_PROFILE_DIR
     ASSAY_PROFILE
     SCRATCH_DIR
-    APPTAINER_BIN
+    MAMBA_BIN
     REFERENCE_BUILD
     THREADS
     MEMORY_GB
@@ -38,11 +38,11 @@ readonly -a CLINICAL_REQUIRED_CONFIG_KEYS=(
     RUN_ROOT
     REFERENCE_DIR
     DATABASE_DIR
-    CONTAINER_DIR
+    ENV_DIR
     ASSAY_PROFILE_DIR
     ASSAY_PROFILE
     SCRATCH_DIR
-    APPTAINER_BIN
+    MAMBA_BIN
 )
 
 readonly -a CLINICAL_SAMPLE_COLUMNS=(
@@ -250,7 +250,7 @@ clinical_validate_config_values() {
         fi
     done
 
-    for key in RUN_ROOT REFERENCE_DIR DATABASE_DIR CONTAINER_DIR ASSAY_PROFILE_DIR SCRATCH_DIR; do
+    for key in RUN_ROOT REFERENCE_DIR DATABASE_DIR ENV_DIR ASSAY_PROFILE_DIR SCRATCH_DIR; do
         value="${CLINICAL_CONFIG[$key]-}"
         [[ -n "$value" ]] || continue
         status=0
@@ -269,15 +269,15 @@ clinical_validate_config_values() {
             clinical_add_error 'Invalid path' "$key=$value (directory is not writable)"
     done
 
-    value="${CLINICAL_CONFIG[APPTAINER_BIN]-}"
+    value="${CLINICAL_CONFIG[MAMBA_BIN]-}"
     if [[ -n "$value" ]]; then
         status=0
         clinical_absolute_existing_path "$value" "$base_directory" executable || status=$?
         case "$status" in
-            0) CLINICAL_CONFIG[APPTAINER_BIN]="$CLINICAL_RESULT" ;;
-            1) clinical_add_error 'Invalid path' "APPTAINER_BIN=$value" ;;
-            2) clinical_add_error 'Missing path' "APPTAINER_BIN=$value" ;;
-            3) clinical_add_error 'Invalid path' "APPTAINER_BIN=$value (not executable)" ;;
+            0) CLINICAL_CONFIG[MAMBA_BIN]="$CLINICAL_RESULT" ;;
+            1) clinical_add_error 'Invalid path' "MAMBA_BIN=$value" ;;
+            2) clinical_add_error 'Missing path' "MAMBA_BIN=$value" ;;
+            3) clinical_add_error 'Invalid path' "MAMBA_BIN=$value (not executable)" ;;
         esac
     fi
 

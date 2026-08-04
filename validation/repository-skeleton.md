@@ -4,7 +4,7 @@
 - Validation date: 2026-07-20
 - Result: PASS
 - Bash: GNU Bash 5.1.16
-- ShellCheck: 0.10.0, official container
+- ShellCheck: 0.10.0 (historically executed from the official image)
 - ShellCheck image digest:
   `koalaman/shellcheck@sha256:2097951f02e735b613f4a34de20c40f937a6c8f18ecb170612c88c34517221fb`
 
@@ -35,10 +35,8 @@ docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.10.0 \
 
 ## Scope observations
 
-- No scientific workflow, reference, database, or ClinicalSuite tool container
+- No scientific workflow, reference, database, or ClinicalSuite tool runtime
   was created or downloaded.
 - `references/` and `databases/` contain documentation only.
-- Scientific container validation is not applicable to this module.
-- The development host does not currently expose an `apptainer` command. This
-  does not affect the non-operational repository skeleton, but it must be
-  resolved before the container build system can pass validation.
+- Scientific environment validation is not applicable to this historical module.
+- Current runtime installation and validation are independently covered by Module 4.

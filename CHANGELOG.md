@@ -7,6 +7,16 @@ require signed validation and change-control records.
 
 ### Added
 
+- Seven isolated Mamba-managed runtime environments, shared automatic
+  activation/path mapping, exact executable validation, explicit locks,
+  resolved YAML exports, and post-validation conda-pack archives.
+- Conda runtime installation, deployment, operations, provenance, validation,
+  and environment-system tests.
+- Source-only release automation with clean-tree, complete-test-suite, clean
+  container-rebuild, reproducible-checksum, manifest, tag, and allowlisted
+  GitHub Release gates.
+- Automatic SIF structure/metadata checks, embedded definition tests, checksum
+  verification, and a generated local container build report.
 - Repository skeleton and documentation contracts.
 - Non-operational `run.sh` entry point with explicit development-state behavior.
 - Unit tests for the launcher exit-status contract.
@@ -47,6 +57,20 @@ require signed validation and change-control records.
 
 ### Changed
 
+- Replaced the Apptainer runtime with Conda prefixes because production HPC
+  policy disables both user namespaces and setuid execution. Scientific
+  commands, module interfaces, ordering, outputs, and validation remain
+  unchanged.
+- Isolated DeepVariant and Octopus from the general variant prefix to satisfy
+  incompatible Java/HTSlib constraints; selected the DeepVariant CPU TensorFlow
+  build explicitly.
+- Migrated preflight, QC, alignment, reference preparation, configuration,
+  provenance, tests, documentation, and release metadata to the Conda runtime.
+- Adopted recipe-only container distribution: users reproduce the validated
+  runtime with `./containers/build.sh`; `.sif` files are never committed or
+  uploaded to GitHub Releases.
+- Made `versions.lock` the source of downloaded build artifacts and their
+  checksums instead of duplicating those values in the builder.
 - Documented the approved V2 consensus clarification: conventional normalization,
   no GA4GH VRS implementation, and no machine-learning consensus model.
 - Made Module 5 external-resource and container validation conditional on the

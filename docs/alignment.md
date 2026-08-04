@@ -34,7 +34,7 @@ sample manifest.
   `GRCh38_full_analysis_set_plus_decoy_hla-20150309`;
 - the matching FAI, sequence dictionary, BWA-MEM2 index including the official
   ALT map, and pinned Broad GRCh38 known-indel VCFs plus indexes; and
-- the validated `alignment.sif` and `gatk.sif` images.
+- the validated `alignment` Conda environment and its explicit lock.
 
 The module verifies all manifest file checksums, reference identity, first-contig
 agreement, the 3,366-contig locked-reference invariant, and every required
@@ -81,7 +81,7 @@ preservation of primary-read and duplicate-flag counts across BQSR.
 
 Each of the seven execution stages has a signature-bound SHA-256 checkpoint.
 An interrupted run resumes only if its module/configuration/input/reference/
-container signature still matches and every checkpointed artifact verifies.
+environment signature still matches and every checkpointed artifact verifies.
 Invalid step outputs are regenerated without deleting valid earlier steps.
 
 Final publication is an atomic sibling-directory rename. Every file is included

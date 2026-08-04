@@ -9,7 +9,7 @@ Information: 2
 Errors
 ------
 1. MANDATORY resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa)
-2. Missing MANDATORY container: /containers/deepvariant.sif
+2. Missing MANDATORY Conda environment: /envs/variant
 
 Warnings
 --------
@@ -23,6 +23,6 @@ Information
 Checks
 ------
 [FAIL] resources: MANDATORY resource missing or unreadable: GRCH38_FASTA (/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa)
-[FAIL] containers: Missing MANDATORY container: /containers/deepvariant.sif
+[FAIL] environments: Missing MANDATORY Conda environment: /envs/variant
 [INFO] resources: FUTURE resource missing or unreadable: CLINVAR (/database/clinvar.vcf.gz; first required Module 14)
 [INFO] resources: FUTURE resource not declared: REVEL (first required Module 15)

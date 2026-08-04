@@ -59,7 +59,7 @@ alignment_usage() {
 Usage: bin/alignment.sh --config FILE --samples FILE [OPTIONS]
 
 Run ClinicalSuite Module 7 with validated QC handoff files and the locked
-alignment/GATK containers.
+alignment Conda environment.
 
 Options:
   --config FILE       validated clinical.conf
@@ -440,10 +440,8 @@ alignment_configuration_signature() {
         printf 'qc_complete\t%s\n' "$(calculate_checksum "$qc_dir/.complete")"
         printf 'qc_outputs\t%s\n' \
             "$(calculate_checksum "$qc_dir/output_checksums.sha256")"
-        printf 'alignment_container\t%s\n' \
-            "$(calculate_checksum "$CONTAINER_DIR/alignment.sif")"
-        printf 'gatk_container\t%s\n' \
-            "$(calculate_checksum "$CONTAINER_DIR/gatk.sif")"
+        printf 'alignment_environment_lock\t%s\n' \
+            "$(calculate_checksum "$ENV_DIR/alignment.lock")"
         for id in "${ALIGNMENT_REQUIRED_REFERENCE_IDS[@]}"; do
             printf 'reference_version.%s\t%s\n' "$id" \
                 "${ALIGNMENT_REFERENCE_VERSION[$id]}"
@@ -536,19 +534,17 @@ alignment_write_command_manifest() {
 
 alignment_write_tool_versions() {
     local destination="$1"
-    local alignment_sha gatk_sha
+    local alignment_lock_sha
 
-    alignment_sha="$(calculate_checksum "$CONTAINER_DIR/alignment.sif")"
-    gatk_sha="$(calculate_checksum "$CONTAINER_DIR/gatk.sif")"
+    alignment_lock_sha="$(calculate_checksum "$ENV_DIR/alignment.lock")"
     {
-        printf 'component\tversion\tcontainer\tcontainer_sha256\n'
-        printf 'BWA-MEM2\t2.3-release-asset (embedded string 2.2.1)\talignment.sif\t%s\n' \
-            "$alignment_sha"
-        printf 'Samtools/HTSlib\t1.24\talignment.sif\t%s\n' "$alignment_sha"
-        printf 'Picard\t3.4.0\talignment.sif\t%s\n' "$alignment_sha"
-        printf 'GATK\t4.6.2.0\tgatk.sif\t%s\n' "$gatk_sha"
-        printf 'Apptainer\t%s\thost\t-\n' \
-            "$("$APPTAINER_BIN" --version | head -n 1)"
+        printf 'component\tversion\tenvironment\tenvironment_lock_sha256\n'
+        printf 'BWA-MEM2\t2.3\talignment\t%s\n' "$alignment_lock_sha"
+        printf 'Samtools/HTSlib\t1.24\talignment\t%s\n' "$alignment_lock_sha"
+        printf 'Picard\t3.4.0\talignment\t%s\n' "$alignment_lock_sha"
+        printf 'GATK\t4.6.2.0\talignment\t%s\n' "$alignment_lock_sha"
+        printf 'Mamba\t%s\thost\t-\n' \
+            "$("$MAMBA_BIN" --version | head -n 1)"
     } >"$destination"
 }
 
@@ -627,10 +623,10 @@ test \"\$dedup_duplicates\" -eq \"\$duplicates\"
   printf 'bqsr_table_valid\\ttrue\\n'
 } > /work/validation/validation.tsv"
 
-    run_container --apptainer "$APPTAINER_BIN" \
+    run_environment \
         --bind-rw "$sample_dir" /work \
         "${ALIGNMENT_GATK_BINDS[@]}" \
-        "$CONTAINER_DIR/alignment.sif" -- \
+        "$ENV_DIR/alignment" -- \
         bash -c "$command" \
         >"$sample_dir/logs/validation.stdout" \
         2>"$sample_dir/logs/validation.stderr"
@@ -682,9 +678,9 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
   samtools sort -@ $threads -m ${sort_memory_mb}M \
     -T /work/tmp/${sample_id}.sort \
     -o /work/${sample_id}.sorted.bam -"
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             "${bwa_binds[@]}" \
-            "$CONTAINER_DIR/alignment.sif" -- \
+            "$ENV_DIR/alignment" -- \
             bash -c "$command" \
             >"$sample_dir/logs/align_sort.stdout" \
             2>"$sample_dir/logs/align_sort.stderr"
@@ -701,9 +697,9 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
         alignment_remove_sample_outputs "$sample_dir" \
             "${sample_id}.sorted.bam.bai" logs/sorted_index.stdout \
             logs/sorted_index.stderr
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             --bind-rw "$sample_dir" /work \
-            "$CONTAINER_DIR/alignment.sif" -- \
+            "$ENV_DIR/alignment" -- \
             samtools index -@ "$threads" \
             "/work/${sample_id}.sorted.bam" \
             >"$sample_dir/logs/sorted_index.stdout" \
@@ -723,9 +719,9 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
             "${sample_id}.duplicates_marked.bai" \
             "${sample_id}.duplicate_metrics.txt" logs/mark_duplicates.stdout \
             logs/mark_duplicates.stderr
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             --bind-rw "$sample_dir" /work \
-            "$CONTAINER_DIR/alignment.sif" -- \
+            "$ENV_DIR/alignment" -- \
             env "PICARD_JAVA_OPTIONS=-Xmx${heap_gb}g -Djava.io.tmpdir=/work/tmp" \
             picard MarkDuplicates \
             "INPUT=/work/${sample_id}.sorted.bam" \
@@ -752,10 +748,10 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
         alignment_remove_sample_outputs "$sample_dir" \
             "${sample_id}.recal.table" logs/base_recalibrator.stdout \
             logs/base_recalibrator.stderr
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             --bind-rw "$sample_dir" /work \
             "${ALIGNMENT_GATK_BINDS[@]}" \
-            "$CONTAINER_DIR/gatk.sif" -- \
+            "$ENV_DIR/alignment" -- \
             gatk --java-options \
             "-Xmx${heap_gb}g -Djava.io.tmpdir=/work/tmp" \
             BaseRecalibrator \
@@ -779,10 +775,10 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
         alignment_remove_sample_outputs "$sample_dir" \
             "${sample_id}.analysis_ready.bam" logs/apply_bqsr.stdout \
             logs/apply_bqsr.stderr
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             --bind-rw "$sample_dir" /work \
             "${ALIGNMENT_GATK_BINDS[@]}" \
-            "$CONTAINER_DIR/gatk.sif" -- \
+            "$ENV_DIR/alignment" -- \
             gatk --java-options \
             "-Xmx${heap_gb}g -Djava.io.tmpdir=/work/tmp" \
             ApplyBQSR \
@@ -806,9 +802,9 @@ bwa-mem2 mem -K 100000000 -Y -t $threads -R $quoted_rg \
         alignment_remove_sample_outputs "$sample_dir" \
             "${sample_id}.analysis_ready.bam.bai" logs/final_index.stdout \
             logs/final_index.stderr
-        run_container --apptainer "$APPTAINER_BIN" \
+        run_environment \
             --bind-rw "$sample_dir" /work \
-            "$CONTAINER_DIR/alignment.sif" -- \
+            "$ENV_DIR/alignment" -- \
             samtools index -@ "$threads" \
             "/work/${sample_id}.analysis_ready.bam" \
             >"$sample_dir/logs/final_index.stdout" \
@@ -860,10 +856,8 @@ alignment_write_provenance() {
         printf 'reference_sha256\t%s\n' "$ALIGNMENT_LOCKED_FASTA_SHA256"
         printf 'reference_manifest\t%s\n' \
             "$REFERENCE_DIR/reference_manifest.tsv"
-        printf 'alignment_container_sha256\t%s\n' \
-            "$(calculate_checksum "$CONTAINER_DIR/alignment.sif")"
-        printf 'gatk_container_sha256\t%s\n' \
-            "$(calculate_checksum "$CONTAINER_DIR/gatk.sif")"
+        printf 'alignment_environment_lock_sha256\t%s\n' \
+            "$(calculate_checksum "$ENV_DIR/alignment.lock")"
         printf 'bwa_input_batch_size\t100000000\n'
         printf 'duplicates_removed\tfalse\n'
         printf 'bqsr_known_sites\tKNOWN_INDELS,MILLS_INDELS\n'
@@ -942,8 +936,8 @@ alignment_main() {
         clinical_print_errors >&2
         return "$ALIGNMENT_EX_UNAVAILABLE"
     fi
-    [[ -s "$CONTAINER_DIR/alignment.sif" && -s "$CONTAINER_DIR/gatk.sif" ]] ||
-        { printf 'ERROR: Module 7 container image is missing\n' >&2; return "$ALIGNMENT_EX_UNAVAILABLE"; }
+    [[ -d "$ENV_DIR/alignment/conda-meta" && -r "$ENV_DIR/alignment.lock" ]] ||
+        { printf 'ERROR: Module 7 Conda environment is missing\n' >&2; return "$ALIGNMENT_EX_UNAVAILABLE"; }
 
     qc_dir="${qc_override:-$RUN_DIR/qc}"
     output_dir="${output_override:-$RUN_DIR/alignment}"

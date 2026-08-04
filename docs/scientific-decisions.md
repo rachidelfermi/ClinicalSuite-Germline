@@ -30,7 +30,7 @@ VEP only; ACMG decision-support tools are deferred to their own reviewed module.
 This narrower boundary supersedes earlier architecture text that placed an
 Octopus forest or ACMG tools/plugins in these images. It does not change caller,
 normalization, annotation, or interpretation workflow design. See
-`docs/container-provenance.md` for the release and packaging review.
+`docs/environment-provenance.md` for the runtime packaging review.
 
 ## SDR-003: Stage-aware preflight resource gates
 

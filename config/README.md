@@ -42,11 +42,11 @@ reference version.
 | `RUN_ROOT` | yes | — | existing writable directory |
 | `REFERENCE_DIR` | yes | — | existing readable directory containing the locked Broad GRCh38 Full Analysis Set + Decoy + HLA manifest |
 | `DATABASE_DIR` | yes | — | existing readable directory |
-| `CONTAINER_DIR` | yes | — | existing readable directory |
+| `ENV_DIR` | yes | — | existing readable directory containing validated environments and locks |
 | `ASSAY_PROFILE_DIR` | yes | — | existing readable directory |
 | `ASSAY_PROFILE` | yes | — | named/versioned safe identifier |
 | `SCRATCH_DIR` | yes | — | existing writable directory |
-| `APPTAINER_BIN` | yes | — | executable file |
+| `MAMBA_BIN` | yes | — | executable Mamba used for integrity checks and environment maintenance |
 | `REFERENCE_BUILD` | no | `GRCh38` | `GRCh38` only |
 | `THREADS` | no | `8` | integer 1–1024 |
 | `MEMORY_GB` | no | `32` | integer 1–65536 |

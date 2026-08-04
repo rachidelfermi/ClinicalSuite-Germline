@@ -32,7 +32,7 @@ The implementation deliberately:
 4. An unused PAR resource was required while the BQSR resource contract was
    incomplete.
 5. Raw sample-manifest FASTQs bypassed the Module 6 handoff.
-6. Container parameters and a BAM validation function were dead code.
+6. Runtime parameters and a BAM validation function were dead code.
 7. Validation was limited to quickcheck; read counts, read groups, sort order,
    duplicate marking, BQSR, statistics, and strict Picard validation were absent.
 8. The final checksum inventory included itself and could never be immutable.
@@ -41,7 +41,7 @@ The implementation deliberately:
     its `@PG CL` field, producing a malformed SAM header rejected by HTSJDK.
 11. GATK created an undeclared implicit BAM index in addition to the explicit
     final index.
-12. The “integration” test mocked Apptainer, used dummy images and fake/empty
+12. The former “integration” test mocked the runtime, used dummy dependencies and fake/empty
     BAMs, and contained unevaluated checksum substitutions. The smoke test only
     exercised `--help`.
 13. The previously deployed local BWA-MEM2 index was interrupted: its checksum
@@ -64,7 +64,7 @@ The implementation deliberately:
 
 ## Validation status
 
-Unit and real-container synthetic integration testing pass. Bash syntax,
+Unit and real-runtime synthetic integration testing pass. Bash syntax,
 ShellCheck 0.11.0, and whitespace validation pass for the replacement files.
 The project-generated HPC BWA-MEM2 index for the locked Broad GRCh38 Full
 Analysis Set + Decoy + HLA has replaced the unusable local index as the sole

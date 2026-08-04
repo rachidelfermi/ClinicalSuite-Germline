@@ -1,6 +1,6 @@
 # Module 6 quality-control validation
 
-Validated on 2026-07-24 with the pinned `qc.sif` image and the approved HG002
+Originally validated on 2026-07-24 with the pinned QC runtime and the approved HG002
 development fixture. The work is software validation, not analytical or
 scientific benchmarking.
 
@@ -17,7 +17,7 @@ bash tests/smoke/test_qc_hg002.sh
 # PASS: HG002 QC smoke test
 ```
 
-The integration test used one synthetic paired record and the real container.
+The integration test used one synthetic paired record and the real runtime.
 It verified FastQC HTML/ZIP output, fastp JSON/HTML output, MultiQC aggregation,
 final FASTQ handoff, and a no-work checkpoint rerun.
 
@@ -37,7 +37,7 @@ policy routing and does not assert biological acceptability.
 
 The complete launcher smoke test took 70.52 seconds wall-clock and reached a
 maximum resident set size of 1,246,212 KiB. Module 6's internal timer reported
-13 seconds; the remaining time was preflight container validation.
+13 seconds; the remaining time was preflight runtime validation.
 
 ## Static validation
 
@@ -45,5 +45,5 @@ All repository Bash files pass `bash -n`. Module 6, its launcher integration,
 reference preparer, and affected tests pass ShellCheck 0.10.0. `git diff
 --check` also passes.
 
-No QC container, scientific workflow after QC, reference database, annotation
+No QC package set, scientific workflow after QC, reference database, annotation
 database, or trained model was changed or downloaded by Module 6.

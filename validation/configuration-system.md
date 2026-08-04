@@ -1,7 +1,7 @@
 # Module 2 configuration-system validation
 
 Module 2 validates configuration inputs only. It performs no scientific analysis
-and does not load references, databases, models, or containers.
+and does not load references, databases, models, or runtime environments.
 
 ## Implemented contract
 
@@ -28,9 +28,9 @@ shellcheck -x -P "$PWD" config/parser.sh config/validate.sh \
 bash tests/unit/test_configuration.sh
 bash tests/smoke/test_configuration_system.sh
 bash tests/unit/test_run_interface.sh
-bash tests/unit/test_container_build.sh
+bash tests/unit/test_environment_build.sh
 bash tests/smoke/test_repository_skeleton.sh
-bash tests/smoke/test_container_system.sh
+bash tests/smoke/test_environment_system.sh
 git diff --check
 ```
 
@@ -41,6 +41,6 @@ repository dependency.
 ## Result
 
 Validated on 2026-07-22. Bash syntax, ShellCheck, configuration unit tests,
-configuration smoke tests, existing launcher/container unit tests, existing
-repository/container smoke tests, and `git diff --check` all passed. The working
+configuration smoke tests, existing launcher/runtime unit tests, existing
+repository/environment smoke tests, and `git diff --check` all passed. The working
 tree was intentionally left uncommitted.

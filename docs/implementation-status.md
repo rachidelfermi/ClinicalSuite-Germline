@@ -5,10 +5,10 @@
 | 1 | Repository skeleton | Complete | See `validation/repository-skeleton.md` |
 | 2 | Configuration system | Complete | See `validation/configuration-system.md` |
 | 3 | Common Bash library | Complete | See `validation/common-bash-library.md` |
-| 4 | Container build system | Complete | See `containers/container_validation_report.txt` |
+| 4 | Conda runtime system | Migration validation in progress | See `envs/environment_validation_report.txt` and `docs/environment-provenance.md` |
 | 5 | Preflight | Complete | See `validation/preflight.md` |
 | 6 | Quality control | Complete | See `validation/quality-control.md` |
-| 7 | Alignment and BAM processing | Revalidation blocked by validation-host RAM | Unit and real-container integration pass; see `validation/alignment-independent-review.md` |
+| 7 | Alignment and BAM processing | Revalidation blocked by validation-host RAM | Unit and real-runtime integration pass; see `validation/alignment-independent-review.md` |
 | 8 | Coverage analysis | Pending | Not started |
 | 9 | DeepVariant | Pending | Not started |
 | 10 | GATK HaplotypeCaller | Pending | Not started |

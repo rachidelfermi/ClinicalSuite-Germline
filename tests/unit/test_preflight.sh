@@ -77,8 +77,8 @@ test_stage_boundaries() {
         fail 'Module 14 resource was not mandatory at annotation'
     [[ "$(preflight_resource_first_module database REVEL)" -eq 15 ]] ||
         fail 'REVEL was not classified as a Module 15 resource'
-    [[ "$(preflight_image_first_module gatk)" -eq 7 ]] ||
-        fail 'GATK was not classified for Module 7 BQSR'
+    [[ "$(clinical_environment_first_module alignment)" -eq 7 ]] ||
+        fail 'alignment environment was not classified for Module 7 BQSR'
     assert_fails preflight_set_stage unknown-stage
 }
 

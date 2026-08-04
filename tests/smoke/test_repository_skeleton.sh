@@ -19,8 +19,7 @@ readonly -a REQUIRED_DIRECTORIES=(
     bin
     config
     config/schemas
-    containers
-    containers/definitions
+    envs
     databases
     docs
     references
@@ -40,8 +39,11 @@ readonly -a REQUIRED_FILES=(
     CHANGELOG.md
     README.md
     VERSION
+    release.sh
     run.sh
-    containers/README.md
+    envs/README.md
+    envs/build.sh
+    envs/validate.sh
     databases/README.md
     docs/implementation-status.md
     docs/scientific-decisions.md
@@ -81,6 +83,7 @@ test_required_files() {
     done
 
     [[ -x "$REPOSITORY_ROOT/run.sh" ]] || fail 'run.sh is not executable'
+    [[ -x "$REPOSITORY_ROOT/release.sh" ]] || fail 'release.sh is not executable'
     [[ -x "$REPOSITORY_ROOT/tests/unit/test_run_interface.sh" ]] || \
         fail 'unit test is not executable'
 }

@@ -9,15 +9,15 @@ readonly PREFLIGHT_REPOSITORY_ROOT
 source "$PREFLIGHT_REPOSITORY_ROOT/config/parser.sh"
 # shellcheck source=bin/common.sh
 source "$PREFLIGHT_SCRIPT_DIR/common.sh"
-# shellcheck source=containers/lib.sh
-source "$PREFLIGHT_REPOSITORY_ROOT/containers/lib.sh"
+# shellcheck source=envs/lib.sh
+source "$PREFLIGHT_REPOSITORY_ROOT/envs/lib.sh"
 
 readonly PREFLIGHT_EX_USAGE=64
 readonly PREFLIGHT_EX_UNAVAILABLE=69
 readonly PREFLIGHT_DEFAULT_STAGE='VARIANT_FILTERING'
 readonly PREFLIGHT_LOCKED_REFERENCE_BASENAME='GRCh38_full_analysis_set_plus_decoy_hla.fa'
 readonly PREFLIGHT_LOCKED_REFERENCE_VERSION='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
-readonly -a PREFLIGHT_IMAGES=("${CLINICAL_CONTAINER_IMAGES[@]}")
+readonly -a PREFLIGHT_ENVIRONMENTS=("${CLINICAL_ENVIRONMENTS[@]}")
 readonly -a PREFLIGHT_REFERENCE_IDS=(
     GRCH38_FASTA
     GRCH38_FASTA_FAI
@@ -173,24 +173,10 @@ preflight_stage_label() {
     printf 'Module %s (%s)\n' "$PREFLIGHT_STAGE_MODULE" "$PREFLIGHT_STAGE_NAME"
 }
 
-preflight_image_first_module() {
-    case "$1" in
-        qc) printf '6\n' ;;
-        alignment) printf '7\n' ;;
-        deepvariant) printf '9\n' ;;
-        # GATK is first consumed by alignment/BAM processing for BQSR.
-        gatk) printf '7\n' ;;
-        octopus) printf '11\n' ;;
-        annotation) printf '14\n' ;;
-        report) printf '16\n' ;;
-        *) return 1 ;;
-    esac
-}
-
-preflight_image_requirement() {
+preflight_environment_requirement() {
     local first_module
 
-    first_module="$(preflight_image_first_module "$1")" || return 1
+    first_module="$(clinical_environment_first_module "$1")" || return 1
     preflight_stage_requirement "$first_module" MANDATORY
 }
 
@@ -356,7 +342,7 @@ preflight_prepare_output() {
 }
 
 preflight_check_runtime() {
-    local command_name output expected_builder=''
+    local command_name output
     local -a commands=(
         awk basename cat chmod cp date df dirname grep gzip head hostname id
         mkdir mktemp mv od pwd rm sed sha256sum sort stat tr
@@ -376,31 +362,18 @@ preflight_check_runtime() {
         fi
     done
     if [[ "$PREFLIGHT_CONFIG_VALID" != true ]]; then
-        preflight_skip runtime 'Apptainer path check skipped because configuration is invalid'
+        preflight_skip runtime 'Mamba path check skipped because configuration is invalid'
         return
     fi
-    if [[ ! -x "$APPTAINER_BIN" ]]; then
-        preflight_fail_check runtime "Apptainer is not executable: $APPTAINER_BIN"
+    if [[ ! -x "$MAMBA_BIN" ]]; then
+        preflight_fail_check runtime "Mamba is not executable: $MAMBA_BIN"
         return
     fi
-    output="$("$APPTAINER_BIN" --version 2>&1)" || {
-        preflight_fail_check runtime "Apptainer version command failed: $APPTAINER_BIN"
+    output="$("$MAMBA_BIN" --version 2>&1)" || {
+        preflight_fail_check runtime "Mamba version command failed: $MAMBA_BIN"
         return
     }
-    if [[ -r "$CONTAINER_DIR/versions.lock" ]]; then
-        while IFS= read -r line; do
-            if [[ "$line" == '# Builder: '* ]]; then
-                expected_builder="${line#\# Builder: }"
-                break
-            fi
-        done <"$CONTAINER_DIR/versions.lock"
-    fi
-    if [[ -n "$expected_builder" && "$output" != "$expected_builder" ]]; then
-        preflight_fail_check compatibility \
-            "Apptainer mismatch: lock expects '$expected_builder', found '$output'"
-    else
-        preflight_pass runtime "Apptainer available: $output"
-    fi
+    preflight_pass runtime "Mamba available: $output"
 }
 
 preflight_check_write_access() {
@@ -892,155 +865,82 @@ preflight_check_references_and_databases() {
             "${PREFLIGHT_RESOURCE_PATH[$key]}" 9
 }
 
-preflight_check_versions_lock() {
-    local lock_file="$CONTAINER_DIR/versions.lock"
-    local image component version source checksum requirement
-    declare -A seen=()
-
-    if [[ ! -r "$lock_file" ]]; then
-        preflight_fail_check containers "Missing versions lock: $lock_file"
-        return
-    fi
-    while IFS=$'\t' read -r image component version source checksum _; do
-        [[ -n "$image" && "$image" != \#* && "$image" != definition ]] || continue
-        if ! clinical_is_identifier "$image"; then
-            preflight_error "Unsafe image name in versions.lock: $image"
-            continue
-        fi
-        if ! preflight_image_requirement "$image"; then
-            preflight_error "Unknown image in versions.lock: $image"
-            continue
-        fi
-        requirement="$PREFLIGHT_RESULT"
-        if [[ "$version" == latest || -z "$version" ]]; then
-            preflight_requirement_issue "$requirement" containers \
-                "Unpinned $requirement container component: $image/$component"
-        fi
-        if [[ "$source" == docker://* && "$source" != *@sha256:* ]]; then
-            preflight_requirement_issue "$requirement" containers \
-                "Unpinned OCI source for $requirement container: $image/$component"
-        fi
-        [[ "$checksum" == - || "$checksum" =~ ^[[:xdigit:]]{64}$ ]] ||
-            preflight_requirement_issue "$requirement" containers \
-                "Malformed component checksum for $requirement container: $image/$component"
-        seen["$image"]=1
-    done <"$lock_file"
-    for image in "${PREFLIGHT_IMAGES[@]}"; do
-        preflight_image_requirement "$image"
-        requirement="$PREFLIGHT_RESULT"
-        if [[ -v "seen[$image]" ]]; then
-            preflight_pass containers "versions.lock contains image: $image"
-        else
-            preflight_requirement_issue "$requirement" containers \
-                "versions.lock lacks $requirement image: $image"
-        fi
-    done
-}
-
-preflight_check_container_command() {
-    local image="$1"
+preflight_check_environment_command() {
+    local environment="$1"
     local label="$2"
     local expected_pattern="$3"
     local expected_status="$4"
     shift 4
-    local image_path="$CONTAINER_DIR/$image.sif"
+    local prefix="$ENV_DIR/$environment"
     local output status requirement
 
-    preflight_image_requirement "$image"
+    preflight_environment_requirement "$environment"
     requirement="$PREFLIGHT_RESULT"
     if [[ "$requirement" == FUTURE ]]; then
-        preflight_info_check containers \
-            "Future container executable check deferred until Module $(preflight_image_first_module "$image"): $label in $image.sif"
+        preflight_info_check environments \
+            "Future environment executable check deferred until Module $(clinical_environment_first_module "$environment"): $label in $environment"
         return
     fi
 
-    if output="$("$APPTAINER_BIN" exec --cleanenv --containall --no-home --pwd / \
-        --net --network none "$image_path" "$@" 2>&1)"; then
+    if output="$(run_environment "$prefix" -- "$@" 2>&1)"; then
         status=0
     else
         status=$?
     fi
     if (( status == expected_status )) && grep -Eq -- "$expected_pattern" <<<"$output"; then
-        preflight_pass containers "$label available in $image.sif"
+        preflight_pass environments "$label available in $environment"
     else
-        preflight_fail_check containers \
-            "$label validation failed in $image.sif (status $status)"
+        preflight_fail_check environments \
+            "$label validation failed in $environment (status $status)"
     fi
 }
 
-preflight_check_containers() {
-    local checksum_file
-    local digest filename image actual requirement
-    local containers_ready=true
-    declare -A expected=()
+preflight_check_environments() {
+    local environment prefix lock_file yml_file requirement installed_lock
+    local environments_ready=true
 
     [[ "$PREFLIGHT_CONFIG_VALID" == true ]] || {
-        preflight_skip containers 'Container checks skipped because configuration is invalid'
+        preflight_skip environments 'Conda environment checks skipped because configuration is invalid'
         return
     }
-    checksum_file="$CONTAINER_DIR/checksums.sha256"
-    preflight_check_versions_lock
-    if [[ ! -r "$checksum_file" ]]; then
-        preflight_fail_check containers "Missing container checksum lock: $checksum_file"
-    else
-        while read -r digest filename _; do
-            [[ -n "$digest" && -n "$filename" ]] || continue
-            if [[ ! "$filename" =~ ^(qc|alignment|gatk|octopus|deepvariant|annotation|report)\.sif$ ]]; then
-                preflight_error "Malformed container checksum entry: $digest $filename"
-                continue
-            fi
-            image="${filename%.sif}"
-            preflight_image_requirement "$image"
-            requirement="$PREFLIGHT_RESULT"
-            if [[ ! "$digest" =~ ^[[:xdigit:]]{64}$ ]]; then
-                preflight_requirement_issue "$requirement" containers \
-                    "Malformed checksum for $requirement container: $filename"
-                continue
-            fi
-            if [[ -v "expected[$filename]" ]]; then
-                preflight_requirement_issue "$requirement" containers \
-                    "Duplicate checksum entry for $requirement container: $filename"
-                continue
-            fi
-            expected["$filename"]="${digest,,}"
-        done <"$checksum_file"
-    fi
-    for image in "${PREFLIGHT_IMAGES[@]}"; do
-        filename="$image.sif"
-        preflight_image_requirement "$image"
+    for environment in "${PREFLIGHT_ENVIRONMENTS[@]}"; do
+        prefix="$ENV_DIR/$environment"
+        lock_file="$ENV_DIR/$environment.lock"
+        yml_file="$ENV_DIR/$environment.yml"
+        preflight_environment_requirement "$environment"
         requirement="$PREFLIGHT_RESULT"
-        if [[ ! -f "$CONTAINER_DIR/$filename" || ! -r "$CONTAINER_DIR/$filename" ]]; then
-            preflight_requirement_issue "$requirement" containers \
-                "Missing $requirement container: $CONTAINER_DIR/$filename"
-            [[ "$requirement" == FUTURE ]] || containers_ready=false
+        if [[ ! -d "$prefix/conda-meta" || ! -x "$prefix/bin" ]]; then
+            preflight_requirement_issue "$requirement" environments \
+                "Missing $requirement Conda environment: $prefix"
+            [[ "$requirement" == FUTURE ]] || environments_ready=false
             continue
         fi
-        if [[ ! -v "expected[$filename]" ]]; then
-            preflight_requirement_issue "$requirement" containers \
-                "No checksum recorded for $requirement container: $filename"
-            [[ "$requirement" == FUTURE ]] || containers_ready=false
+        if [[ ! -r "$lock_file" || ! -r "$yml_file" ]]; then
+            preflight_requirement_issue "$requirement" environments \
+                "Missing lock/YAML for $requirement environment: $environment"
+            [[ "$requirement" == FUTURE ]] || environments_ready=false
             continue
         fi
         if [[ "$requirement" == FUTURE ]]; then
-            preflight_info_check containers \
-                "Future container integrity validation deferred until Module $(preflight_image_first_module "$image"): $filename"
+            preflight_info_check environments \
+                "Future environment integrity validation deferred until Module $(clinical_environment_first_module "$environment"): $environment"
             continue
         fi
-        actual="$(calculate_checksum "$CONTAINER_DIR/$filename" 2>/dev/null)" || actual=''
-        if [[ "$actual" == "${expected[$filename]}" ]]; then
-            preflight_pass containers "Container checksum valid: $filename"
+        installed_lock="$("$MAMBA_BIN" list --explicit --prefix "$prefix" 2>/dev/null)" || installed_lock=''
+        if [[ -n "$installed_lock" && "$installed_lock" == "$(<"$lock_file")" ]]; then
+            preflight_pass environments "Explicit lock matches installed environment: $environment"
         else
-            preflight_requirement_issue "$requirement" containers \
-                "Container checksum mismatch for $requirement container: $filename"
-            [[ "$requirement" == FUTURE ]] || containers_ready=false
+            preflight_requirement_issue "$requirement" environments \
+                "Installed packages differ from explicit lock: $environment"
+            environments_ready=false
         fi
     done
 
-    [[ "$containers_ready" == true ]] || {
-        preflight_skip containers 'Executable checks skipped because container integrity failed'
+    [[ "$environments_ready" == true ]] || {
+        preflight_skip environments 'Executable checks skipped because environment integrity failed'
         return
     }
-    clinical_container_each_runtime_check preflight_check_container_command
+    clinical_environment_each_runtime_check preflight_check_environment_command
 }
 
 preflight_check_disk_space_path() {
@@ -1213,7 +1113,7 @@ preflight_run() {
     preflight_check_runtime
     preflight_check_permissions
     preflight_check_samples
-    preflight_check_containers
+    preflight_check_environments
     preflight_check_references_and_databases
     preflight_check_disk_space
     preflight_write_reports || return 1

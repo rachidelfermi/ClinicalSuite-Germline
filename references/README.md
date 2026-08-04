@@ -31,7 +31,7 @@ The preparer downloads only the locked FASTA and its official ALT, source README
 and regions metadata. Every source has a pinned byte size and SHA-256. Downloads
 are resumable and verified before reuse.
 
-The validated alignment container generates:
+The validated alignment environment generates:
 
 - `GRCh38_full_analysis_set_plus_decoy_hla.fa.fai` with Samtools 1.24;
 - `GRCh38_full_analysis_set_plus_decoy_hla.dict` with Picard 3.4.0;

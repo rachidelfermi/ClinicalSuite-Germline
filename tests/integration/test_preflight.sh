@@ -59,12 +59,12 @@ test_missing_fastq() {
     run_failure_case "$root" 'Missing FASTQ|fastq_r2'
 }
 
-test_missing_container() {
-    local root="$TEST_ROOT/missing-container"
+test_missing_environment() {
+    local root="$TEST_ROOT/missing-environment"
 
     preflight_fixture_create "$root" WGS
-    mv "$root/containers/qc.sif" "$root/containers/qc.sif.missing"
-    run_failure_case "$root" 'Missing MANDATORY container:.*qc\.sif'
+    mv "$root/envs/qc" "$root/envs/qc.missing"
+    run_failure_case "$root" 'Missing MANDATORY Conda environment:.*qc'
 }
 
 test_future_database_is_informational() {
@@ -92,16 +92,16 @@ test_annotation_database_is_mandatory() {
         --stage ANNOTATION
 }
 
-test_future_container_is_informational() {
-    local root="$TEST_ROOT/future-container"
+test_future_environment_is_informational() {
+    local root="$TEST_ROOT/future-environment"
 
     preflight_fixture_create "$root" WGS
-    mv "$root/containers/annotation.sif" "$root/containers/annotation.sif.missing"
+    mv "$root/envs/annotation" "$root/envs/annotation.missing"
     "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
         --output-dir "$root/preflight-output" --stage VARIANT_FILTERING >/dev/null
-    grep -Fq 'Missing FUTURE container:' \
+    grep -Fq 'Missing FUTURE Conda environment:' \
         "$root/preflight-output/preflight_report.txt" ||
-        fail 'future container was not reported as informational'
+        fail 'future environment was not reported as informational'
 }
 
 test_future_database_manifest_is_informational() {
@@ -211,7 +211,7 @@ test_aggregated_failures() {
     local status report
 
     preflight_fixture_create "$root" WGS
-    mv "$root/containers/qc.sif" "$root/containers/qc.sif.missing"
+    mv "$root/envs/qc" "$root/envs/qc.missing"
     mv "$root/references/known_indels.vcf.gz" "$root/references/known_indels.missing"
     set +e
     "$PREFLIGHT" --config "$root/clinical.conf" --samples "$root/samples.tsv" \
@@ -220,8 +220,8 @@ test_aggregated_failures() {
     set -e
     [[ $status -eq 69 ]] || fail "aggregate case returned $status"
     report="$(<"$root/preflight-output/preflight_report.txt")"
-    [[ "$report" == *'Missing MANDATORY container:'*qc.sif* ]] ||
-        fail 'aggregate report omitted missing container'
+    [[ "$report" == *'Missing MANDATORY Conda environment:'*qc* ]] ||
+        fail 'aggregate report omitted missing environment'
     [[ "$report" == *'MANDATORY resource missing or unreadable: KNOWN_INDELS'* ]] ||
         fail 'aggregate report omitted missing current-stage reference'
 }
@@ -229,10 +229,10 @@ test_aggregated_failures() {
 main() {
     test_success
     test_missing_fastq
-    test_missing_container
+    test_missing_environment
     test_future_database_is_informational
     test_annotation_database_is_mandatory
-    test_future_container_is_informational
+    test_future_environment_is_informational
     test_future_database_manifest_is_informational
     test_acmg_stage_boundary
     test_unreadable_fastq

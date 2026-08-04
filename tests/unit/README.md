@@ -1,13 +1,13 @@
 # Unit tests
 
-Current unit coverage includes the stable `run.sh` interface, container build
+Current unit coverage includes the stable `run.sh` interface, environment build
 metadata, and the configuration/sample-manifest parser. Configuration tests cover
 valid exports, defaults, malformed and duplicate keys, malformed manifests,
 duplicate samples, missing files, invalid paths, assay rules, and CLI behavior.
 
 `test_common.sh` exercises every public function in `bin/common.sh`, including
 success and expected-failure paths for logging, cleanup, atomic files,
-checkpoints, commands, containers, structural validators, provenance, timers, and
+checkpoints, commands, Conda environments, structural validators, provenance, timers, and
 validated configuration access.
 
 `test_preflight.sh` covers aggregation, JSON safety, FASTQ pairing, resource path

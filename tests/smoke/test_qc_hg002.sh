@@ -33,18 +33,19 @@ FASTQC_FAIL_POLICY=REVIEW
 FASTQC_WARNING_POLICY=REVIEW
 MIN_READ_PAIRS=50000
 EOF
-sed -i "s|^CONTAINER_DIR=.*|CONTAINER_DIR=$REPOSITORY_ROOT/containers|" \
+sed -i "s|^ENV_DIR=.*|ENV_DIR=$REPOSITORY_ROOT/envs|" \
     "$TEST_ROOT/fixture/clinical.conf"
-sed -i 's|^APPTAINER_BIN=.*|APPTAINER_BIN=/usr/bin/apptainer|' \
+sed -i 's|^MAMBA_BIN=.*|MAMBA_BIN=/home/bio/anaconda3/envs/mamba/bin/mamba|' \
     "$TEST_ROOT/fixture/clinical.conf"
 cat >"$TEST_ROOT/fixture/samples.tsv" <<EOF
 sample_id	assay	platform	fastq_r1	fastq_r2	library_id	platform_unit	sequencing_center	read_group_id	expected_chromosome_complement	capture_intervals	reportable_intervals
 HG002	WGS	ILLUMINA	$REPOSITORY_ROOT/tests/data/fastq/HG002_test_R1.fastq.gz	$REPOSITORY_ROOT/tests/data/fastq/HG002_test_R2.fastq.gz	HG002_LIB1	FLOWCELL1.1	GIAB_TEST	HG002.FC1.L1	XY	NA	intervals/reportable.bed
 EOF
 
-"$REPOSITORY_ROOT/run.sh" \
+"$REPOSITORY_ROOT/bin/qc.sh" \
     --config "$TEST_ROOT/fixture/clinical.conf" \
-    --samples "$TEST_ROOT/fixture/samples.tsv" >/dev/null
+    --samples "$TEST_ROOT/fixture/samples.tsv" \
+    --output-dir "$TEST_ROOT/fixture/runs/RUN_001/qc" --quiet
 
 QC_DIR="$TEST_ROOT/fixture/runs/RUN_001/qc"
 [[ -s "$QC_DIR/multiqc/multiqc_report.html" ]]

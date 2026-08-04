@@ -35,7 +35,7 @@ qc_usage() {
     cat <<'EOF'
 Usage: bin/qc.sh --config FILE --samples FILE [OPTIONS]
 
-Run ClinicalSuite Module 6 with the validated qc.sif image.
+Run ClinicalSuite Module 6 with the validated QC Conda environment.
 
 Options:
   --config FILE       validated clinical.conf
@@ -221,7 +221,7 @@ qc_decide_sample() {
 }
 
 qc_configuration_signature() {
-    local profile_file="$1" image="$2"
+    local profile_file="$1" environment="$2"
     local sample_id field
 
     {
@@ -232,7 +232,8 @@ qc_configuration_signature() {
         printf 'config\t%s\n' "$(sha256sum "$CLINICAL_CONFIG_SOURCE" | awk '{print $1}')"
         printf 'samples\t%s\n' "$(sha256sum "$CLINICAL_SAMPLES_SOURCE" | awk '{print $1}')"
         printf 'profile\t%s\n' "$(sha256sum "$profile_file" | awk '{print $1}')"
-        printf 'container\t%s\n' "$(sha256sum "$image" | awk '{print $1}')"
+        printf 'environment_lock\t%s\n' \
+            "$(sha256sum "$ENV_DIR/qc.lock" | awk '{print $1}')"
         for sample_id in "${CLINICAL_SAMPLE_IDS[@]}"; do
             for field in fastq_r1 fastq_r2; do
                 printf '%s.%s\t%s\n' "$sample_id" "$field" \
@@ -256,7 +257,7 @@ qc_write_command_manifest() {
 }
 
 qc_run_sample() {
-    local work_dir="$1" image="$2" sample_id="$3" threads="$4"
+    local work_dir="$1" environment="$2" sample_id="$3" threads="$4"
     local sample_dir="$work_dir/samples/$sample_id"
     local r1="${CLINICAL_SAMPLES[$sample_id.fastq_r1]}"
     local r2="${CLINICAL_SAMPLES[$sample_id.fastq_r2]}"
@@ -269,11 +270,11 @@ qc_run_sample() {
     create_directory "$sample_dir/logs"
 
     report_progress 1 3 "$sample_id raw FastQC"
-    run_container --apptainer "$APPTAINER_BIN" \
+    run_environment \
         --bind-ro "$r1" "/inputs/${sample_id}_R1.fastq.gz" \
         --bind-ro "$r2" "/inputs/${sample_id}_R2.fastq.gz" \
         --bind-rw "$sample_dir/raw_fastqc" /output \
-        "$image" -- \
+        "$environment" -- \
         fastqc --threads "$threads" --quiet --outdir /output \
         "/inputs/${sample_id}_R1.fastq.gz" "/inputs/${sample_id}_R2.fastq.gz" \
         >"$sample_dir/logs/fastqc.stdout" 2>"$sample_dir/logs/fastqc.stderr"
@@ -285,13 +286,13 @@ qc_run_sample() {
         die "$sample_id FastQC did not produce the required reports"
 
     report_progress 2 3 "$sample_id fastp pass-through report"
-    # The contained shell, not this orchestrator, expands its parameters.
+    # The environment-scoped shell, not this orchestrator, expands parameters.
     # shellcheck disable=SC2016
-    run_container --apptainer "$APPTAINER_BIN" \
+    run_environment \
         --bind-ro "$r1" "/inputs/${sample_id}_R1.fastq.gz" \
         --bind-ro "$r2" "/inputs/${sample_id}_R2.fastq.gz" \
         --bind-rw "$sample_dir/fastp" /output \
-        "$image" -- \
+        "$environment" -- \
         sh -c '
             exec fastp \
                 --in1 "$1" \
@@ -329,13 +330,13 @@ qc_run_sample() {
 }
 
 qc_write_results() {
-    local work_dir="$1" image="$2" profile_file="$3" signature="$4" runtime="$5"
+    local work_dir="$1" environment="$2" profile_file="$3" signature="$4" runtime="$5"
     local status_file="$work_dir/qc_status.tsv"
     local final_manifest="$work_dir/final_fastq.tsv"
     local provenance="$work_dir/provenance.tsv"
     local sample_id counts failures warnings pairs decision
     local r1 r2 module_status=PASS
-    local pipeline_version container_sha profile_sha
+    local pipeline_version environment_lock_sha profile_sha
 
     printf 'sample_id\tfastqc_failures\tfastqc_warnings\tread_pairs\tdecision\n' >"$status_file"
     printf 'sample_id\tfastq_r1\tfastq_r2\tsha256_r1\tsha256_r2\tmode\n' >"$final_manifest"
@@ -368,7 +369,7 @@ qc_write_results() {
     done
 
     pipeline_version="$(get_pipeline_version "$QC_REPOSITORY_ROOT/VERSION")"
-    container_sha="$(sha256sum "$image" | awk '{print $1}')"
+    environment_lock_sha="$(sha256sum "$ENV_DIR/qc.lock" | awk '{print $1}')"
     profile_sha="$(sha256sum "$profile_file" | awk '{print $1}')"
     {
         printf 'key\tvalue\n'
@@ -378,8 +379,9 @@ qc_write_results() {
         printf 'run_id\t%s\n' "$RUN_ID"
         printf 'status\t%s\n' "$module_status"
         printf 'signature\t%s\n' "$signature"
-        printf 'container\t%s\n' "$image"
-        printf 'container_sha256\t%s\n' "$container_sha"
+        printf 'environment\t%s\n' "$environment"
+        printf 'environment_lock\t%s\n' "$ENV_DIR/qc.lock"
+        printf 'environment_lock_sha256\t%s\n' "$environment_lock_sha"
         printf 'profile\t%s\n' "$profile_file"
         printf 'profile_sha256\t%s\n' "$profile_sha"
         printf 'fastqc_version\t0.12.1\n'
@@ -411,7 +413,7 @@ qc_existing_status() {
 
 qc_main() {
     local config_file='' samples_file='' output_override=''
-    local quiet=0 verbose=0 profile_file image output_dir output_parent work_dir
+    local quiet=0 verbose=0 profile_file environment output_dir output_parent work_dir
     local signature status runtime threads sample_id
 
     while (( $# > 0 )); do
@@ -448,8 +450,11 @@ qc_main() {
         qc_print_profile_errors
         return "$QC_EX_UNAVAILABLE"
     fi
-    image="$CONTAINER_DIR/qc.sif"
-    [[ -s "$image" ]] || { printf 'ERROR: missing qc.sif: %s\n' "$image" >&2; return "$QC_EX_UNAVAILABLE"; }
+    environment="$ENV_DIR/qc"
+    [[ -d "$environment/conda-meta" && -r "$ENV_DIR/qc.lock" ]] || {
+        printf 'ERROR: validated QC Conda environment is missing: %s\n' "$environment" >&2
+        return "$QC_EX_UNAVAILABLE"
+    }
 
     if [[ -n "$output_override" ]]; then
         [[ "$output_override" == /* ]] || output_override="$(pwd -P)/$output_override"
@@ -459,7 +464,7 @@ qc_main() {
     fi
     output_parent="${output_dir%/*}"
     create_directory "$output_parent"
-    signature="$(qc_configuration_signature "$profile_file" "$image")"
+    signature="$(qc_configuration_signature "$profile_file" "$environment")"
 
     if [[ -d "$output_dir" ]]; then
         if check_complete_marker "$output_dir/.complete" "$signature"; then
@@ -495,14 +500,14 @@ qc_main() {
 
     log_info "starting Module 6 for ${#CLINICAL_SAMPLE_IDS[@]} sample(s)"
     for sample_id in "${CLINICAL_SAMPLE_IDS[@]}"; do
-        qc_run_sample "$work_dir" "$image" "$sample_id" "$threads"
+        qc_run_sample "$work_dir" "$environment" "$sample_id" "$threads"
     done
 
     create_directory "$work_dir/multiqc"
-    run_container --apptainer "$APPTAINER_BIN" \
+    run_environment \
         --bind-ro "$work_dir/samples" /input \
         --bind-rw "$work_dir/multiqc" /output \
-        "$image" -- \
+        "$environment" -- \
         multiqc --force --filename multiqc_report.html --outdir /output /input \
         >"$work_dir/logs/multiqc.stdout" 2>"$work_dir/logs/multiqc.stderr"
     if [[ ! -s "$work_dir/multiqc/multiqc_report.html" ||
@@ -516,7 +521,7 @@ qc_main() {
 
     runtime="$(stop_timer module6)"
     status="$(qc_write_results \
-        "$work_dir" "$image" "$profile_file" "$signature" "$runtime")"
+        "$work_dir" "$environment" "$profile_file" "$signature" "$runtime")"
     if ! mv -- "$work_dir" "$output_dir"; then
         die "cannot publish QC output: $output_dir"
     fi

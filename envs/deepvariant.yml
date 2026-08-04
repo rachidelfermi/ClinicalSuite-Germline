@@ -1,0 +1,7 @@
+name: clinicalsuite-deepvariant
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - deepvariant=1.10.0
+  - tensorflow=2.11.1=cpu*

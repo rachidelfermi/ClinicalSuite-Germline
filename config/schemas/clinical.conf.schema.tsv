@@ -3,11 +3,11 @@ RUN_ID	yes	identifier	-	[A-Za-z0-9][A-Za-z0-9._-]*
 RUN_ROOT	yes	directory	-	existing writable directory; relative to clinical.conf
 REFERENCE_DIR	yes	directory	-	existing readable directory; relative to clinical.conf
 DATABASE_DIR	yes	directory	-	existing readable directory; relative to clinical.conf
-CONTAINER_DIR	yes	directory	-	existing readable directory; relative to clinical.conf
+ENV_DIR	yes	directory	-	existing readable Conda environment root; relative to clinical.conf
 ASSAY_PROFILE_DIR	yes	directory	-	existing readable directory; relative to clinical.conf
 ASSAY_PROFILE	yes	identifier	-	named versioned profile identifier
 SCRATCH_DIR	yes	directory	-	existing writable directory; relative to clinical.conf
-APPTAINER_BIN	yes	executable	-	existing executable file; relative to clinical.conf
+MAMBA_BIN	yes	executable	-	existing Mamba executable; relative to clinical.conf
 REFERENCE_BUILD	no	enum	GRCh38	GRCh38 only
 THREADS	no	integer	8	1-1024
 MEMORY_GB	no	integer	32	1-65536

@@ -1,0 +1,6 @@
+name: clinicalsuite-octopus
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - octopus=0.7.4

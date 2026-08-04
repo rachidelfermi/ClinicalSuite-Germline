@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-container integration test on a synthetic, non-biological reference.
+# Real-environment integration test on a synthetic, non-biological reference.
 
 set -Eeuo pipefail
 
@@ -63,12 +63,10 @@ make_vcf() {
         printf '##contig=<ID=chr1,length=4000>\n'
         printf '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
     } >"$temporary"
-    apptainer exec --cleanenv --containall --no-home \
-        --bind "$TEST_ROOT:/work:rw" "$REPOSITORY_ROOT/containers/gatk.sif" \
-        bgzip -c /work/empty.vcf >"$destination"
-    apptainer exec --cleanenv --containall --no-home \
-        --bind "$TEST_ROOT:/work:rw" "$REPOSITORY_ROOT/containers/gatk.sif" \
-        tabix -f -p vcf "/work/${destination##*/}"
+    "$REPOSITORY_ROOT/envs/activate.sh" "$REPOSITORY_ROOT/envs/alignment" -- \
+        bgzip -c "$temporary" >"$destination"
+    "$REPOSITORY_ROOT/envs/activate.sh" "$REPOSITORY_ROOT/envs/alignment" -- \
+        tabix -f -p vcf "$destination"
 }
 
 prepare_reference() {
@@ -86,22 +84,16 @@ prepare_reference() {
         }'
         printf '\n'
     } >"$fasta"
-    apptainer exec --cleanenv --containall --no-home \
-        --bind "$reference_dir:/reference:rw" \
-        "$REPOSITORY_ROOT/containers/alignment.sif" \
-        samtools faidx /reference/GRCh38_full_analysis_set_plus_decoy_hla.fa
-    apptainer exec --cleanenv --containall --no-home \
-        --bind "$reference_dir:/reference:rw" \
-        "$REPOSITORY_ROOT/containers/alignment.sif" \
+    "$REPOSITORY_ROOT/envs/activate.sh" "$REPOSITORY_ROOT/envs/alignment" -- \
+        samtools faidx "$fasta"
+    "$REPOSITORY_ROOT/envs/activate.sh" "$REPOSITORY_ROOT/envs/alignment" -- \
         picard CreateSequenceDictionary \
-        R=/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa \
-        O=/reference/GRCh38_full_analysis_set_plus_decoy_hla.dict
-    apptainer exec --cleanenv --containall --no-home \
-        --bind "$reference_dir:/reference:rw" \
-        "$REPOSITORY_ROOT/containers/alignment.sif" \
+        "R=$fasta" \
+        "O=$reference_dir/GRCh38_full_analysis_set_plus_decoy_hla.dict"
+    "$REPOSITORY_ROOT/envs/activate.sh" "$REPOSITORY_ROOT/envs/alignment" -- \
         bwa-mem2 index \
-        -p /reference/bwa/GRCh38_full_analysis_set_plus_decoy_hla.fa \
-        /reference/GRCh38_full_analysis_set_plus_decoy_hla.fa
+        -p "$index_dir/GRCh38_full_analysis_set_plus_decoy_hla.fa" \
+        "$fasta"
     printf 'synthetic-alt\n' \
         >"$index_dir/GRCh38_full_analysis_set_plus_decoy_hla.fa.alt"
 
@@ -128,16 +120,15 @@ main() {
     local signature='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
     local before after
 
-    [[ -s "$REPOSITORY_ROOT/containers/alignment.sif" &&
-        -s "$REPOSITORY_ROOT/containers/gatk.sif" ]] ||
-        fail 'real Module 7 containers are unavailable'
+    [[ -d "$REPOSITORY_ROOT/envs/alignment/conda-meta" ]] ||
+        fail 'real Module 7 Conda environment is unavailable'
     mkdir -p "$work"/{checkpoints,logs,samples}
     prepare_reference
     make_fastqs "$r1" "$r2" \
         "$TEST_ROOT/reference/GRCh38_full_analysis_set_plus_decoy_hla.fa"
 
-    APPTAINER_BIN=/usr/bin/apptainer
-    CONTAINER_DIR="$REPOSITORY_ROOT/containers"
+    MAMBA_BIN="${MAMBA_BIN:-/home/bio/anaconda3/envs/mamba/bin/mamba}"
+    ENV_DIR="$REPOSITORY_ROOT/envs"
     ALIGNMENT_QC_FASTQ_R1=([SYNTHETIC]="$r1")
     ALIGNMENT_QC_FASTQ_R2=([SYNTHETIC]="$r2")
     ALIGNMENT_QC_READ_PAIRS=([SYNTHETIC]=10)
@@ -153,9 +144,9 @@ main() {
     alignment_run_sample "$work" SYNTHETIC 2 4 "$signature"
 
     [[ -s "$work/samples/SYNTHETIC/SYNTHETIC.analysis_ready.bam" ]] ||
-        fail 'real-container integration BAM is missing'
+        fail 'real-environment integration BAM is missing'
     [[ -s "$work/samples/SYNTHETIC/SYNTHETIC.analysis_ready.bam.bai" ]] ||
-        fail 'real-container integration BAI is missing'
+        fail 'real-environment integration BAI is missing'
     for path in \
         "$work/samples/SYNTHETIC/SYNTHETIC.sorted.bam" \
         "$work/samples/SYNTHETIC/SYNTHETIC.sorted.bam.bai" \
@@ -192,7 +183,7 @@ main() {
         "$work/checkpoints/SYNTHETIC.07_validate.complete")"
     [[ "$before" == "$after" ]] ||
         fail 'completed step was rerun instead of resumed'
-    printf 'PASS: real-container alignment integration test\n'
+    printf 'PASS: real-environment alignment integration test\n'
 }
 
 main "$@"

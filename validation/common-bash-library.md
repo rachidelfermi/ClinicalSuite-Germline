@@ -13,9 +13,9 @@ bioinformatics workflow and defines no scientific parameter.
   markers with optional embedded provenance.
 - Quoted command logging, stdout/stderr capture, timing, retries, and exact exit
   propagation.
-- Clean, contained, network-disabled Apptainer execution with explicit mounts.
+- Isolated Conda-prefix execution with explicit logical-to-host path mappings.
 - Structural FASTQ/BAM/VCF/index/checksum validation only.
-- Tool/container/pipeline versions, environment provenance, progress, and timers.
+- Tool/environment/pipeline versions, host provenance, progress, and timers.
 - Direct access to Module 2's validated allowlist and associative array without
   duplicating configuration parsing.
 
@@ -32,15 +32,15 @@ bash tests/smoke/test_common_library.sh
 bash tests/unit/test_configuration.sh
 bash tests/smoke/test_configuration_system.sh
 bash tests/unit/test_run_interface.sh
-bash tests/unit/test_container_build.sh
+bash tests/unit/test_environment_build.sh
 bash tests/smoke/test_repository_skeleton.sh
-bash tests/smoke/test_container_system.sh
+bash tests/smoke/test_environment_system.sh
 git diff --check
 ```
 
 ShellCheck 0.8.0 is unpacked in a temporary directory because it is not installed
 system-wide. The smoke test executes `python --version` inside the approved
-`report.sif` through `run_container`; no scientific data or workflow is used.
+the `report` prefix through `run_environment`; no scientific data or workflow is used.
 
 ## Result
 

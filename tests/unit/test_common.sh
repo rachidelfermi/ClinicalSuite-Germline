@@ -166,34 +166,25 @@ EOF
     chmod +x "$path"
 }
 
-create_mock_apptainer() {
+create_mock_mamba() {
     local path="$1"
 
     cat >"$path" <<'EOF'
 #!/usr/bin/env bash
-set -u
-printf '%s\n' "$*" >"${MOCK_APPTAINER_ARGS:?}"
 if [[ "${1:-}" == --version ]]; then
-    printf 'apptainer version mock-1.0\n'
+    printf '2.1.1\n'
     exit 0
 fi
-while (( $# > 0 )); do
-    case "$1" in
-        exec|--cleanenv|--containall|--no-home|--net) shift ;;
-        --pwd|--bind|--network) shift 2 ;;
-        *) shift; break ;;
-    esac
-done
-"$@"
+exit 1
 EOF
     chmod +x "$path"
 }
 
-test_command_and_container_execution() {
+test_command_and_environment_execution() {
     local mock="$TEST_ROOT/mock-command.sh" counter="$TEST_ROOT/counter"
     local stdout_file="$TEST_ROOT/stdout" stderr_file="$TEST_ROOT/stderr"
-    local apptainer="$TEST_ROOT/apptainer" image="$TEST_ROOT/image.sif"
-    local arguments_file="$TEST_ROOT/apptainer.args" output status bind_directory="$TEST_ROOT/bind with spaces"
+    local environment="$TEST_ROOT/environment" output status
+    local bind_directory="$TEST_ROOT/bind with spaces"
 
     create_mock_command "$mock"
     run_command --retries 1 --retry-delay 0 --timing --stdout "$stdout_file" \
@@ -209,18 +200,14 @@ test_command_and_container_execution() {
     set -e
     [[ $status -eq 7 && $RUN_COMMAND_STATUS -eq 7 ]] || fail 'run_command lost failure status'
 
-    create_mock_apptainer "$apptainer"
-    : >"$image"
-    mkdir "$bind_directory"
-    export MOCK_APPTAINER_ARGS="$arguments_file"
-    output="$(run_container --apptainer "$apptainer" --bind-ro "$bind_directory" /inputs \
-        "$image" -- printf 'container-ok\n')"
-    [[ "$output" == container-ok ]] || fail 'run_container did not execute the command'
-    assert_contains "$(<"$arguments_file")" '--cleanenv --containall --no-home --pwd / --net --network none'
-    assert_contains "$(<"$arguments_file")" "$bind_directory:/inputs:ro"
-    assert_fails run_container --apptainer "$apptainer" "$TEST_ROOT/missing.sif" -- true
+    mkdir -p "$environment"/{bin,conda-meta} "$bind_directory"
+    output="$(run_environment --bind-ro "$bind_directory" /inputs \
+        "$environment" -- printf '%s\n' /inputs/example.txt)"
+    [[ "$output" == "$bind_directory/example.txt" ]] ||
+        fail 'run_environment did not map paths and execute the command'
+    assert_fails run_environment "$TEST_ROOT/missing-environment" -- true
     assert_fails run_command --retries
-    assert_fails run_container --bind-ro only-one-value
+    assert_fails run_environment --bind-ro only-one-value
 }
 
 test_structural_validation_and_checksums() {
@@ -254,33 +241,32 @@ test_structural_validation_and_checksums() {
 test_versions_environment_progress_timing_and_config() {
     local version environment_file="$TEST_ROOT/environment.txt" output elapsed
     local elapsed_file="$TEST_ROOT/elapsed.txt"
-    local apptainer="$TEST_ROOT/apptainer-version" image="$TEST_ROOT/version.sif"
+    local mamba="$TEST_ROOT/mamba-version" environment="$TEST_ROOT/version-environment"
 
     version="$(get_tool_version bash --version)"
     assert_contains "$version" 'GNU bash'
     [[ "$(get_pipeline_version "$REPOSITORY_ROOT/VERSION")" == 2.0.0-dev ]] || \
         fail 'pipeline version is wrong'
 
-    create_mock_apptainer "$apptainer"
-    : >"$image"
-    export MOCK_APPTAINER_ARGS="$TEST_ROOT/version.args"
-    declare -ga CLINICAL_CONFIG_KEYS=(APPTAINER_BIN THREADS EMPTY_VALUE)
+    create_mock_mamba "$mamba"
+    mkdir -p "$environment"/{bin,conda-meta}
+    declare -ga CLINICAL_CONFIG_KEYS=(MAMBA_BIN THREADS EMPTY_VALUE)
     declare -gA CLINICAL_CONFIG=(
-        [APPTAINER_BIN]="$apptainer"
+        [MAMBA_BIN]="$mamba"
         [THREADS]=8
         [EMPTY_VALUE]=''
     )
     [[ "$(config_get THREADS)" == 8 ]] || fail 'config_get returned wrong value'
-    [[ "$(config_require APPTAINER_BIN)" == "$apptainer" ]] || fail 'config_require failed'
+    [[ "$(config_require MAMBA_BIN)" == "$mamba" ]] || fail 'config_require failed'
     assert_fails config_get UNKNOWN
     assert_fails config_require EMPTY_VALUE
-    output="$(get_container_version "$image" printf 'container-version-1\n')"
-    [[ "$output" == container-version-1 ]] || fail 'get_container_version failed'
+    output="$(get_environment_version "$environment" printf 'environment-version-1\n')"
+    [[ "$output" == environment-version-1 ]] || fail 'get_environment_version failed'
 
     report_environment "$environment_file"
     assert_contains "$(<"$environment_file")" 'hostname='
     assert_contains "$(<"$environment_file")" 'operating_system='
-    assert_contains "$(<"$environment_file")" 'apptainer_version=apptainer version mock-1.0'
+    assert_contains "$(<"$environment_file")" 'mamba_version=2.1.1'
     output="$(report_progress 3 10 Alignment 2>&1)"
     assert_contains "$output" '[3/10] Alignment'
     assert_fails report_progress 11 10 invalid
@@ -299,7 +285,7 @@ main() {
     test_errors_and_requirements
     test_temporary_paths_and_traps
     test_filesystem_and_checkpoints
-    test_command_and_container_execution
+    test_command_and_environment_execution
     test_structural_validation_and_checksums
     test_versions_environment_progress_timing_and_config
     cleanup

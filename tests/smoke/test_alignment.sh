@@ -40,9 +40,8 @@ require_validation_inputs() {
         "$REFERENCE_DIR/known-sites/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz.tbi"
         "$FASTQ_DIR/HG002_test_R1.fastq.gz"
         "$FASTQ_DIR/HG002_test_R2.fastq.gz"
-        "$REPOSITORY_ROOT/containers/qc.sif"
-        "$REPOSITORY_ROOT/containers/alignment.sif"
-        "$REPOSITORY_ROOT/containers/gatk.sif"
+        "$REPOSITORY_ROOT/envs/qc.lock"
+        "$REPOSITORY_ROOT/envs/alignment.lock"
     )
     for path in "${required[@]}"; do
         [[ -s "$path" ]] || fail "required real-validation input is missing: $path"
@@ -67,11 +66,11 @@ RUN_ID=HG002_MODULE7_VALIDATION
 RUN_ROOT=$TEST_ROOT/runs
 REFERENCE_DIR=$REFERENCE_DIR
 DATABASE_DIR=$TEST_ROOT/databases
-CONTAINER_DIR=$REPOSITORY_ROOT/containers
+ENV_DIR=$REPOSITORY_ROOT/envs
 ASSAY_PROFILE_DIR=$TEST_ROOT/profiles
 ASSAY_PROFILE=hg002-wgs
 SCRATCH_DIR=$TEST_ROOT/scratch
-APPTAINER_BIN=/usr/bin/apptainer
+MAMBA_BIN=${MAMBA_BIN:-/home/bio/anaconda3/envs/mamba/bin/mamba}
 REFERENCE_BUILD=GRCh38
 THREADS=4
 MEMORY_GB=8

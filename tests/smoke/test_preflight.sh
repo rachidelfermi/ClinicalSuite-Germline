@@ -14,9 +14,9 @@ readonly TEST_ROOT
 trap 'chmod -R u+w "$TEST_ROOT" 2>/dev/null || true; rm -rf -- "$TEST_ROOT"' EXIT
 
 preflight_fixture_create "$TEST_ROOT/fixture" WES
-sed -i "s|^CONTAINER_DIR=.*|CONTAINER_DIR=$REPOSITORY_ROOT/containers|" \
+sed -i "s|^ENV_DIR=.*|ENV_DIR=$REPOSITORY_ROOT/envs|" \
     "$TEST_ROOT/fixture/clinical.conf"
-sed -i 's|^APPTAINER_BIN=.*|APPTAINER_BIN=/usr/bin/apptainer|' \
+sed -i 's|^MAMBA_BIN=.*|MAMBA_BIN=/home/bio/anaconda3/envs/mamba/bin/mamba|' \
     "$TEST_ROOT/fixture/clinical.conf"
 
 "$REPOSITORY_ROOT/bin/preflight.sh" \
@@ -35,4 +35,4 @@ grep -Fq 'DEEPVARIANT_MODEL_WES' \
 grep -Fq 'Future resource declared and available; content validation begins at Module 14: VEP_CACHE' \
     "$TEST_ROOT/fixture/preflight-output/preflight_report.txt"
 
-printf 'PASS: preflight real-container smoke test\n'
+printf 'PASS: preflight real-environment smoke test\n'

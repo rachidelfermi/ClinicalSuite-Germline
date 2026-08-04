@@ -8,26 +8,32 @@ preflight_fixture_checksum() {
     printf '%s\n' "${output%% *}"
 }
 
-preflight_fixture_write_mock_apptainer() {
+preflight_fixture_write_mock_mamba() {
     local target="$1"
 
     cat >"$target" <<'EOF'
 #!/usr/bin/env bash
 set -u
 if [[ "${1:-}" == --version ]]; then
-    printf 'apptainer version mock-1.0\n'
+    printf '2.1.1\n'
     exit 0
 fi
-[[ "${1:-}" == exec ]] || exit 2
-shift
-while (( $# > 0 )); do
-    case "$1" in
-        --cleanenv|--containall|--no-home|--net) shift ;;
-        --pwd|--network|--bind) shift 2 ;;
-        *) shift; break ;;
-    esac
-done
-command_name="${1:-}"
+if [[ "${1:-}" == list && "${2:-}" == --explicit && "${3:-}" == --prefix ]]; then
+    prefix="${4:?}"
+    cat "${prefix%/*}/${prefix##*/}.lock"
+    exit 0
+fi
+exit 2
+EOF
+    chmod +x "$target"
+}
+
+preflight_fixture_write_mock_tool() {
+    local target="$1"
+
+    cat >"$target" <<'EOF'
+#!/usr/bin/env bash
+command_name="${0##*/}"
 case "$command_name" in
     fastqc) printf 'FastQC v0.12.1\n' ;;
     fastp) printf 'fastp 1.3.6\n' ;;
@@ -77,12 +83,12 @@ preflight_fixture_add_database_file() {
 preflight_fixture_create() {
     local root="$1"
     local assay="${2:-WGS}"
-    local reference_manifest database_manifest fasta_checksum image
+    local reference_manifest database_manifest fasta_checksum environment tool
     local capture_value='NA'
     local reference_name='GRCh38_full_analysis_set_plus_decoy_hla.fa'
     local reference_version='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
 
-    mkdir -p "$root"/{runs,references,databases,containers,profiles,scratch,data,intervals}
+    mkdir -p "$root"/{runs,references,databases,envs,profiles,scratch,data,intervals}
     mkdir -p "$root/references"/{bwa,models/wgs,models/wes}
     mkdir -p "$root/databases"/{vep_cache,loftee}
 
@@ -173,18 +179,21 @@ preflight_fixture_create() {
     preflight_fixture_add_database_file "$database_manifest" "$root/databases" \
         DBNSFP dbnsfp.gz test-v1 "$fasta_checksum"
 
-    preflight_fixture_write_mock_apptainer "$root/apptainer"
-    printf '# ClinicalSuite V2 container and component lock\n' >"$root/containers/versions.lock"
-    printf '# Builder: apptainer version mock-1.0\n' >>"$root/containers/versions.lock"
-    for image in qc alignment gatk octopus deepvariant annotation report; do
-        printf '%s-image\n' "$image" >"$root/containers/$image.sif"
-        printf '%s\tcomponent\t1.0\tdocker://example/%s@sha256:%064d\t%064d\tTEST\n' \
-            "$image" "$image" 1 1 >>"$root/containers/versions.lock"
+    preflight_fixture_write_mock_mamba "$root/mamba"
+    for environment in qc alignment variant deepvariant octopus annotation report; do
+        mkdir -p "$root/envs/$environment"/{bin,conda-meta}
+        printf '@EXPLICIT\nhttps://example.invalid/%s-1.0-0.conda\n' "$environment" \
+            >"$root/envs/$environment.lock"
+        printf 'name: %s\ndependencies:\n  - mock=1.0\n' "$environment" \
+            >"$root/envs/$environment.yml"
     done
-    (
-        cd "$root/containers" || exit 1
-        sha256sum qc.sif alignment.sif gatk.sif octopus.sif deepvariant.sif annotation.sif report.sif
-    ) >"$root/containers/checksums.sha256"
+    preflight_fixture_write_mock_tool "$root/envs/mock-tool"
+    for tool in fastqc fastp multiqc bwa-mem2 samtools picard mosdepth gatk \
+        bcftools htsfile octopus run_deepvariant vep python; do
+        for environment in qc alignment variant deepvariant octopus annotation report; do
+            ln -s "$root/envs/mock-tool" "$root/envs/$environment/bin/$tool"
+        done
+    done
 
     if [[ "$assay" == WES ]]; then
         capture_value='intervals/capture.bed'
@@ -194,11 +203,11 @@ RUN_ID=RUN_001
 RUN_ROOT=runs
 REFERENCE_DIR=references
 DATABASE_DIR=databases
-CONTAINER_DIR=containers
+ENV_DIR=envs
 ASSAY_PROFILE_DIR=profiles
 ASSAY_PROFILE=test-${assay,,}-v1
 SCRATCH_DIR=scratch
-APPTAINER_BIN=apptainer
+MAMBA_BIN=mamba
 MIN_RUN_FREE_GB=0
 MIN_SCRATCH_FREE_GB=0
 DISK_SPACE_POLICY=ERROR

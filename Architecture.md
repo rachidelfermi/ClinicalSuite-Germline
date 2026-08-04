@@ -28,12 +28,12 @@ These instructions supersede the V2 implementation portions of sections 3.7 and
 directions, not current implementation requirements. All other architecture
 constraints and clinical validation gates remain in force.
 
-The approved Module 4 directive dated 2026-07-21 further narrows container
-contents: trained caller models, VEP caches/plugins, references, and databases
-remain external; `annotation.sif` contains VEP and its runtime only; and
-`report.sif` contains only the pinned Python reporting runtime. This supersedes
-the broader bundling descriptions in sections 8 and 10.2 without changing any
-scientific workflow.
+The approved runtime-migration directive dated 2026-08-03 replaces Apptainer
+execution with isolated Conda environments built exclusively by Mamba. Trained
+caller models, VEP caches/plugins, references, and databases remain external.
+This supersedes the former container packaging descriptions in sections 6–8 and
+10.2 without changing module interfaces, scientific commands, order, outputs,
+or validation gates.
 
 The approved staged-preflight directive dated 2026-07-27 makes external
 resource requirements conditional on the selected execution stage. Resources
@@ -170,7 +170,7 @@ their authority from GATK Best Practices.
 DRAGMAP and proprietary DRAGEN were reviewed. GATK now recommends a DRAGEN-GATK
 single-sample path, and a recent DRAGEN study reports better aggregate small-
 variant accuracy than BWA plus DeepVariant or HaplotypeCaller [11,12]. They are not
-adopted here because the requested portable Bash/Apptainer design must run without
+adopted here because the requested portable Bash/Conda design must run without
 licensed hardware/software, and the entire three-caller workflow would need to be
 revalidated after an aligner change. This decision should be revisited at each
 major validation cycle; it is not a claim that BWA-MEM2 is more accurate.
@@ -498,7 +498,7 @@ No annotation or pathogenicity field feeds backward into analytical consensus.
 
 | Module | Inputs | Required outputs | Failure behavior |
 |---|---|---|---|
-| `00_preflight` | config, sample TSV, paths, SIFs, reference/database manifests | resolved configuration, compatibility/checksum report, one missing-input report | Collect all missing/incompatible items, print once, exit without starting tools. |
+| `00_preflight` | config, sample TSV, paths, Conda locks, reference/database manifests | resolved configuration, compatibility/checksum report, one missing-input report | Collect all missing/incompatible items, print once, exit without starting tools. |
 | `01_qc` | paired FASTQ, assay profile | raw/processed FastQC, fastp JSON/HTML, MultiQC, final FASTQ or immutable pass-through links | Record QC failures; stop before alignment unless an audited override is allowed. |
 | `02_alignment` | final FASTQ, reference/index, read-group metadata | marked BAM, BQSR table, analysis-ready BAM/BAI, duplicate/alignment metrics | Remove only incomplete temporary outputs; preserve logs and atomic completed files. |
 | `03_coverage` | analysis-ready BAM, reportable/capture intervals | mosdepth files; WES HsMetrics; failed-region BED/TSV | Coverage failure blocks a negative report and is propagated to all drafts. |
@@ -539,17 +539,13 @@ ClinicalSuite/
 │   ├── annotate.sh
 │   ├── acmg.sh
 │   └── report.py
-├── containers/
-│   ├── definitions/
-│   ├── checksums.sha256
-│   ├── versions.lock
-│   ├── qc.sif
-│   ├── alignment.sif
-│   ├── gatk.sif
-│   ├── octopus.sif
-│   ├── deepvariant.sif
-│   ├── annotation.sif
-│   └── report.sif
+├── envs/
+│   ├── build.sh
+│   ├── validate.sh
+│   ├── activate.sh
+│   ├── {qc,alignment,variant,deepvariant,octopus,annotation,report}.yml
+│   ├── {qc,alignment,variant,deepvariant,octopus,annotation,report}.lock
+│   └── archive_checksums.sha256
 ├── references/
 │   └── README.md
 ├── databases/
@@ -589,10 +585,10 @@ RUN_ID/
 
 ## 7. Runtime and HPC architecture
 
-The host runtime requires Bash 4.4+ and Apptainer only, plus ordinary POSIX core
-utilities invoked by the shell. There is no runtime Conda environment and no
-Python requirement on the host. Python runs only inside `report.sif` or
-`annotation.sif` for the consensus, annotation support, ACMG, and report modules.
+The host runtime requires Bash 4.4+, Mamba, and ordinary POSIX core utilities.
+Mamba builds and verifies isolated prefix environments; the launcher adds the
+selected prefix to `PATH` automatically, so users never activate environments.
+Python is provided only by the environment that needs it.
 
 `run.sh` is a strict, scheduler-neutral orchestrator. A user may submit it from
 Slurm, PBS, LSF, or an interactive node; scheduler commands are not embedded in
@@ -613,32 +609,32 @@ are explicit. Re-running identical locked inputs must be reproducible within eac
 tool's documented determinism; byte identity is tested where practical and
 semantic VCF identity otherwise.
 
-## 8. Container strategy
+## 8. Conda runtime strategy
 
-Every scientific executable runs in one of the requested SIFs:
+Every scientific executable runs in one automatically selected environment:
 
-| Image | Contents/role |
+| Environment | Contents/role |
 |---|---|
-| `qc.sif` | FastQC, fastp, MultiQC |
-| `alignment.sif` | BWA-MEM2, Samtools, Picard, mosdepth |
-| `gatk.sif` | GATK plus bcftools/htslib used for VCF validation and normalization |
-| `octopus.sif` | Octopus and its pinned germline forest |
-| `deepvariant.sif` | Apptainer conversion of the official stable CPU OCI image |
-| `annotation.sif` | Ensembl VEP/plugins, InterVar, AutoACMG and their language runtimes; data remain external |
-| `report.sif` | Pinned Python environment for consensus, VRS, validation helpers, and reporting |
+| `qc` | FastQC, fastp, MultiQC, fonts and headless Java runtime |
+| `alignment` | BWA-MEM2, Samtools, Picard, mosdepth and GATK BQSR |
+| `variant` | GATK, bcftools/HTSlib and Samtools |
+| `deepvariant` | DeepVariant with the explicitly selected CPU TensorFlow build |
+| `octopus` | Octopus and its compatible HTSlib runtime |
+| `annotation` | Ensembl VEP runtime; caches/plugins/data remain external |
+| `report` | Pinned Python reporting runtime |
 
-Each image is built from a reviewed definition or, for DeepVariant, a pinned OCI
-digest. Floating tags such as `latest` are forbidden. `versions.lock` records the
-upstream version, source URL, source/container digest, build date, definition
-checksum, licenses, and validation status. SIF SHA-256 values are verified during
-preflight and recorded per run. No Conda activation occurs inside or outside the
-images; final images contain only the resolved runtime environment.
+The finer caller isolation is required because DeepVariant, GATK, and Octopus
+have incompatible Java/HTSlib dependency constraints. It does not alter module
+interfaces. Every direct package is version-pinned. `envs/build.sh` uses only
+`mamba create` and `mamba install`, validates activation, package integrity,
+executables, and reported versions, then emits both an explicit platform lock
+and a resolved `environment.yml`. Only after validation does it invoke
+`conda-pack`; archive SHA-256 values are recorded separately.
 
-Images are read-only. The reference and database roots are bound read-only,
-the run directory read-write, and scratch read-write. Host home is not required.
-Network access is disabled during analysis. GPU DeepVariant is deferred until a
-separate image and equivalence/performance validation are approved; CPU is the
-simple default.
+Reference genomes, trained models, annotation caches, plugins, and databases
+are never installed in an environment. They remain external, immutable inputs.
+CPU DeepVariant is the production default; GPU execution requires a separately
+approved runtime and equivalence validation.
 
 ## 9. Configuration philosophy
 
@@ -678,34 +674,20 @@ scientific parameter.
 references/databases once, produce no traceback or shell diagnostic, and perform
 no partial analysis.
 
-### 10.2 Container checks
+### 10.2 Conda environment checks
 
-Every image must pass executable presence and version checks, including the
-specified examples. Results, exit codes, SIF hashes, and timestamps are written to
-`container_validation_report.txt`. A container cannot be released if its reported
-version differs from `versions.lock` or a tool writes an unexpected error while
-returning zero.
+Every prefix must activate non-interactively and pass `mamba list` dependency
+integrity, executable-presence, and exact version checks. The installed explicit
+package set must equal the committed `.lock`; the resolved YAML is retained for
+human-readable reconstruction. Results and exit codes are written to
+`envs/environment_validation_report.txt`. Portable archives are generated only
+after this report passes and are verified against `archive_checksums.sha256`.
 
-At minimum, validation invokes:
-
-```bash
-apptainer exec containers/qc.sif fastqc --version
-apptainer exec containers/qc.sif fastp --version
-apptainer exec containers/qc.sif multiqc --version
-apptainer exec containers/alignment.sif bwa-mem2 version
-apptainer exec containers/alignment.sif samtools --version
-apptainer exec containers/alignment.sif mosdepth --version
-apptainer exec containers/gatk.sif gatk --version
-apptainer exec containers/gatk.sif bcftools --version
-apptainer exec containers/octopus.sif octopus --help
-apptainer exec containers/deepvariant.sif run_deepvariant --help
-apptainer exec containers/annotation.sif vep --help
-apptainer exec containers/report.sif python --version
-```
-
-Picard, the Octopus forest, DeepVariant model metadata, VEP plugins, VRS library,
-InterVar, AutoACMG, and report-library imports receive additional targeted checks;
-a binary version command alone does not validate models or data compatibility.
+At minimum, validation invokes FastQC, fastp, MultiQC, BWA-MEM2, Samtools,
+Picard, mosdepth, GATK, bcftools/HTSlib, DeepVariant, Octopus, VEP, Python, and
+the reporting-library import set through `envs/activate.sh`. Model and external
+data compatibility remain separate preflight/module checks; a binary version
+command alone never validates those resources.
 
 ### 10.3 Analytical and scientific validation
 
@@ -745,7 +727,7 @@ and reproducibility. A release requires documented approval of:
 - ACMG evidence extraction concordance against expert-curated examples; and
 - full traceability from every report statement to source evidence.
 
-Any tool, model, container, parameter, reference, database schema, VEP cache, or
+Any tool, model, environment, parameter, reference, database schema, VEP cache, or
 clinical rule update enters change control. Risk assessment determines regression
 scope; a major caller/reference/model change requires analytical revalidation.
 In-silico specimens may support update validation but do not replace appropriate
@@ -763,7 +745,7 @@ issues must be resolved empirically:
    review-only.
 2. **Octopus evidence and maintenance.** Its method is strong, but recent
    independent clinical and GeneMind evidence is limited and its distributed
-   forest is an assay-transfer risk. Container buildability, release activity,
+   forest is an assay-transfer risk. Runtime buildability, release activity,
    forest calibration, and incremental value are gates. Failure removes Octopus
    only after a documented comparison and triggers redesign/revalidation.
 3. **GeneMind transferability.** One favorable platform benchmark does not validate

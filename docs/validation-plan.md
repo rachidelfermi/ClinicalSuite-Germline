@@ -1,123 +1,97 @@
 # Incremental validation plan
 
-Each module must complete this sequence before the next module begins:
+Validation proves software execution, interfaces, provenance, checkpointing,
+and reproducibility. It is not analytical validation or clinical performance
+qualification.
 
-1. design against `Architecture.md` and the scientific decision record;
-2. implementation within the declared module contract;
-3. Bash syntax or Python compilation checks;
-4. ShellCheck or applicable static analysis;
-5. focused unit tests;
-6. module smoke tests, including expected failures;
-7. output/file-format and provenance validation;
-8. documentation and implementation-status update; and
-9. a scoped project-state commit containing only that module.
+## Universal gates
 
-A missing required validation tool is a blocker, not a passing result. Scientific
-tools and containers additionally require version, model, reference compatibility,
-and representative-data validation; a successful `--version` command alone is
-insufficient.
-
-## Repository skeleton
-
-The repository skeleton is tested by:
+Every implemented shell module must pass:
 
 ```bash
-bash -n run.sh tests/unit/test_run_interface.sh \
-  tests/smoke/test_repository_skeleton.sh
-shellcheck run.sh tests/unit/test_run_interface.sh \
-  tests/smoke/test_repository_skeleton.sh
-bash tests/unit/test_run_interface.sh
-bash tests/smoke/test_repository_skeleton.sh
+find bin config envs references tests validation -type f -name '*.sh' -print0 |
+  xargs -0 -n1 bash -n
+find bin config envs references tests validation -type f -name '*.sh' -print0 |
+  xargs -0 shellcheck
+git diff --check
 ```
 
-The tests confirm required paths, executable state, successful help, rejected
-invalid arguments, and the clear missing-input exit used before preflight
-exists. Python compilation is not applicable because this module contains no
-Python source.
+Unit, integration, and smoke tests run after static checks. Integration/smoke
+tests use actual Conda executables unless the test explicitly targets an error
+path with a controlled mock.
 
-## Container build system
-
-Module 4 validation is performed with:
+## Conda runtime gates
 
 ```bash
-bash -n containers/build.sh containers/validate.sh \
-  tests/unit/test_container_build.sh tests/smoke/test_container_system.sh
-shellcheck containers/build.sh containers/validate.sh \
-  tests/unit/test_container_build.sh tests/smoke/test_container_system.sh
-bash tests/unit/test_container_build.sh
-bash tests/smoke/test_container_system.sh --require-images
-./containers/validate.sh
-(cd containers && sha256sum --check checksums.sha256)
+MAMBA_BIN=/path/to/mamba ./envs/validate.sh
+bash tests/unit/test_environment_build.sh
+bash tests/smoke/test_environment_system.sh --require-archives
+(cd envs && sha256sum --check archive_checksums.sha256)
 ```
 
-The release gate checks all required executables and versions, expected CLI exit
-behavior, report-library imports, SIF hashes, and the absence of embedded caller
-models and annotation data. No scientific dataset or workflow is exercised in
-Module 4.
+For every environment, validation checks:
 
-## Common Bash library
+- prefix activation through `envs/activate.sh`;
+- `mamba list` dependency integrity;
+- required executable availability;
+- exact reported tool versions;
+- reporting-library imports where applicable;
+- explicit package lock generation;
+- resolved YAML generation; and
+- archive creation/checksum only after the complete validation matrix passes.
 
-Module 3 validation is performed with:
+The DeepVariant runtime must resolve the CPU TensorFlow build and contain no CUDA
+runtime packages. References, models, caches, plugins, and databases must be
+absent from every prefix/archive.
 
-```bash
-bash -n bin/common.sh tests/unit/test_common.sh \
-  tests/integration/test_configuration_common.sh \
-  tests/smoke/test_common_library.sh
-shellcheck -x -P "$PWD" bin/common.sh tests/unit/test_common.sh \
-  tests/integration/test_configuration_common.sh \
-  tests/smoke/test_common_library.sh
-bash tests/unit/test_common.sh
-bash tests/integration/test_configuration_common.sh
-bash tests/smoke/test_common_library.sh
-```
+## Configuration and common library
 
-The gate covers every public function, expected failures, paths containing
-spaces, failed atomic producers, retry/status/output capture, SIGTERM cleanup,
-checkpoint signatures, the Module 2 state interface, and an actual command in
-`report.sif` with networking disabled. It performs no bioinformatics analysis.
+Configuration tests cover unknown/duplicate/missing keys, malformed values,
+invalid paths, sample columns and metadata, FASTQ pairing, aggregate errors, and
+immutable resolved configuration. Common-library tests cover logs, errors,
+cleanup, atomic operations, checksums, commands, environment execution/path
+mapping, provenance, timers, progress, and safe configuration access.
 
 ## Preflight
 
-Module 5 validation is performed with:
+Preflight tests cover missing FASTQs, environments, locks, references,
+databases, permissions, malformed configuration, assembly incompatibility,
+stage deferral, successful execution, text/JSON report validity, and exit codes.
+It verifies runtime state but never installs, repairs, or downloads anything.
 
-```bash
-bash -n bin/preflight.sh run.sh tests/helpers/preflight_fixture.sh \
-  tests/unit/test_preflight.sh tests/integration/test_preflight.sh \
-  tests/smoke/test_preflight.sh
-shellcheck -x -P "$PWD" bin/preflight.sh run.sh \
-  tests/helpers/preflight_fixture.sh tests/unit/test_preflight.sh \
-  tests/integration/test_preflight.sh tests/smoke/test_preflight.sh
-bash tests/unit/test_preflight.sh
-bash tests/integration/test_preflight.sh
-bash tests/smoke/test_preflight.sh
-```
+## Quality control
 
-Fixtures cover missing FASTQs, current and future containers, stage-deferred
-annotation and ACMG databases, unreadable inputs, invalid permissions, malformed
-configuration, incompatible references, unsupported reference identities,
-aggregated failures, and success. The smoke test uses real Module 4 SIFs and
-synthetic WES resources named and versioned for the locked Broad GRCh38 Full
-Analysis Set + Decoy + HLA contract without performing scientific analysis.
+Module 6 uses a synthetic pair for integration and the approved 50,000-pair GIAB
+HG002 fixture for smoke validation. FastQC HTML/ZIP, fastp FASTQ/JSON/HTML,
+MultiQC, logs, checksums, provenance, completion markers, checkpoint reuse, and
+input-change invalidation are checked through the `qc` environment.
 
-## Reference preparation
+## Alignment and BAM processing
 
-The ClinicalSuite V2 reference gate is:
+Module 7 unit tests independently assert command order and scientific contract.
+Real integration runs BWA-MEM2, Samtools, Picard, and GATK from the `alignment`
+environment against a synthetic reference. It checks coordinate sorting,
+indexes, duplicate metrics, BQSR, analysis-ready BAM integrity, read groups,
+logs, provenance, step checkpoints, reuse, and invalidation.
 
-```bash
-bash -n references/prepare_grch38.sh
-shellcheck references/prepare_grch38.sh
-./references/prepare_grch38.sh
-```
+The production-reference smoke test uses the approved HG002 fixture and the
+locked Broad GRCh38 Full Analysis Set + Decoy + HLA with the project-generated
+BWA-MEM2 indexes. Loading that index requires a production-class HPC memory
+allocation; a memory-constrained development-host failure is recorded, never
+misreported as module success.
 
-The preparer verifies the official
-`GRCh38_full_analysis_set_plus_decoy_hla.fa` byte size and SHA-256 before
-indexing. The FAI and dictionary must both contain 3,366 sequences and the FAI
-must include primary `chr`, decoy, and HLA contig classes. A rerun must reuse
-verified sources and completed derived files. The final manifest and completion
-marker are forbidden until the BWA-MEM2 index succeeds and the complete bundle
-checksum inventory verifies.
+## Runtime equivalence
 
-From Module 7 onward, preflight must reject any other FASTA basename or a core
-reference-manifest version other than
-`GRCh38_full_analysis_set_plus_decoy_hla-20150309`. Annotation databases remain
-external and are not part of this validation gate.
+Migration equivalence is evaluated at the scientific interface rather than by
+requiring byte-identical archives or reports that contain timestamps/paths.
+Checks compare record/read counts, validated output structures, sorting/read
+groups, QC metrics, checkpoints, and normalized scientific content. Any
+scientific difference is fatal; expected provenance/runtime-path differences
+are documented.
+
+## Future modules
+
+Modules 8–16 must add their own unit, real-runtime integration, HG002 smoke,
+checkpoint, provenance, and reproducibility gates. Annotation resources do not
+block through Module 13; annotation becomes mandatory at Module 14 and ACMG
+resources at Module 15.

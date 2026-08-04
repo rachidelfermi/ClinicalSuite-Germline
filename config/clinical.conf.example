@@ -5,11 +5,11 @@ RUN_ROOT=/srv/clinicalsuite/runs
 # Must contain the locked GRCh38_full_analysis_set_plus_decoy_hla reference manifest.
 REFERENCE_DIR=/srv/clinicalsuite/references
 DATABASE_DIR=/srv/clinicalsuite/databases
-CONTAINER_DIR=/srv/clinicalsuite/containers
+ENV_DIR=/srv/clinicalsuite/envs
 ASSAY_PROFILE_DIR=/srv/clinicalsuite/assay-profiles
 ASSAY_PROFILE=illumina-wgs-v1
 SCRATCH_DIR=/scratch/clinicalsuite
-APPTAINER_BIN=/usr/bin/apptainer
+MAMBA_BIN=/opt/conda/envs/mamba/bin/mamba
 REFERENCE_BUILD=GRCh38
 THREADS=8
 MEMORY_GB=32

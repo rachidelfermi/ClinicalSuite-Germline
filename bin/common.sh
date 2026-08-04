@@ -142,8 +142,8 @@ common__read_fastq_record() {
 
 common__emit_environment_report() {
     local hostname_value user_value os_value='unknown'
-    local cpu_value='unknown' ram_kib='unknown' apptainer_value='not configured'
-    local key value apptainer_bin line
+    local cpu_value='unknown' ram_kib='unknown' mamba_value='not configured'
+    local key value mamba_bin line
 
     hostname_value="$(hostname 2>/dev/null || printf 'unknown')"
     user_value="$(id -un 2>/dev/null || printf '%s' "${USER:-unknown}")"
@@ -166,8 +166,8 @@ common__emit_environment_report() {
             fi
         done </proc/meminfo
     fi
-    if apptainer_bin="$(config_get APPTAINER_BIN 2>/dev/null)"; then
-        apptainer_value="$("$apptainer_bin" --version 2>&1 | { IFS= read -r line; printf '%s' "$line"; })"
+    if mamba_bin="$(config_get MAMBA_BIN 2>/dev/null)"; then
+        mamba_value="$("$mamba_bin" --version 2>&1 | { IFS= read -r line; printf '%s' "$line"; })"
     fi
 
     printf 'generated_at=%s\n' "$(common__timestamp)"
@@ -176,7 +176,7 @@ common__emit_environment_report() {
     printf 'operating_system=%s\n' "$os_value"
     printf 'cpu_count=%s\n' "$cpu_value"
     printf 'ram_kib=%s\n' "$ram_kib"
-    printf 'apptainer_version=%s\n' "$apptainer_value"
+    printf 'mamba_version=%s\n' "$mamba_value"
 }
 
 ###############################################################################
@@ -484,7 +484,7 @@ check_complete_marker() {
 }
 
 ###############################################################################
-# COMMAND AND CONTAINER EXECUTION
+# COMMAND AND CONDA-ENVIRONMENT EXECUTION
 ###############################################################################
 
 run_command() {
@@ -574,61 +574,63 @@ run_command() {
     return "$status"
 }
 
-run_container() {
-    local apptainer_bin=''
-    local image=''
+run_environment() {
+    local prefix=''
     local source_path destination_path mode
-    local -a binds=() container_command=() arguments=()
+    local mapping argument mapped
+    local -a mappings=() environment_command=() activated_command=()
 
     while (( $# > 0 )); do
         case "$1" in
-            --apptainer)
-                (( $# >= 2 )) || { log_error '--apptainer requires a value'; return 2; }
-                apptainer_bin="$2"; shift 2
-                ;;
             --bind-ro|--bind-rw)
-                (( $# >= 3 )) || { log_error "$1 requires host and container paths"; return 2; }
+                (( $# >= 3 )) || { log_error "$1 requires host and logical paths"; return 2; }
                 mode="${1#--bind-}"
                 source_path="$2"
                 destination_path="$3"
                 shift 3
                 [[ "$source_path" == /* && -e "$source_path" && "$destination_path" == /* &&
                     "$source_path" != *[:,]* && "$destination_path" != *[:,]* ]] || {
-                    log_error "invalid container bind: $source_path -> $destination_path"
+                    log_error "invalid environment path mapping: $source_path -> $destination_path"
                     return 2
                 }
-                binds+=("$source_path:$destination_path:$mode")
+                mappings+=("$source_path" "$destination_path" "$mode")
                 ;;
-            --) shift; container_command=("$@"); break ;;
-            -*) log_error "unknown run_container option: $1"; return 2 ;;
+            --) shift; environment_command=("$@"); break ;;
+            -*) log_error "unknown run_environment option: $1"; return 2 ;;
             *)
-                [[ -z "$image" ]] || { log_error "unexpected container argument: $1"; return 2; }
-                image="$1"
+                [[ -z "$prefix" ]] || { log_error "unexpected environment argument: $1"; return 2; }
+                prefix="$1"
                 shift
                 ;;
         esac
     done
-    [[ -n "$image" && -f "$image" && -r "$image" ]] || {
-        log_error "container image is missing or unreadable: $image"
+    [[ -n "$prefix" && -d "$prefix/conda-meta" && -x "$prefix/bin" ]] || {
+        log_error "Conda environment is missing or invalid: $prefix"
         return 1
     }
-    (( ${#container_command[@]} > 0 )) || {
-        log_error 'run_container received no container command'
+    (( ${#environment_command[@]} > 0 )) || {
+        log_error 'run_environment received no command'
         return 2
     }
-    if [[ -z "$apptainer_bin" ]]; then
-        apptainer_bin="$(config_require APPTAINER_BIN)" || return 1
-    fi
-    [[ -x "$apptainer_bin" ]] || {
-        log_error "Apptainer executable is invalid: $apptainer_bin"
-        return 1
-    }
-    arguments=(exec --cleanenv --containall --no-home --pwd / --net --network none)
-    for source_path in "${binds[@]}"; do
-        arguments+=(--bind "$source_path")
+
+    # Module commands use stable logical paths. Translate only
+    # declared mappings so the scientific command contracts remain unchanged.
+    for argument in "${environment_command[@]}"; do
+        mapped="$argument"
+        for ((mapping=0; mapping<${#mappings[@]}; mapping+=3)); do
+            source_path="${mappings[mapping]}"
+            destination_path="${mappings[mapping + 1]}"
+            mapped="${mapped//"$destination_path"/"$source_path"}"
+        done
+        activated_command+=("$mapped")
     done
-    arguments+=("$image" "${container_command[@]}")
-    run_command -- "$apptainer_bin" "${arguments[@]}"
+    run_command -- env \
+        "CONDA_PREFIX=$prefix" \
+        "CONDA_DEFAULT_ENV=${prefix##*/}" \
+        CONDA_SHLVL=1 \
+        "PATH=$prefix/bin:/usr/bin:/bin" \
+        JAVA_HOME= PYTHONHOME= PYTHONPATH= \
+        "${activated_command[@]}"
 }
 
 ###############################################################################
@@ -767,12 +769,12 @@ get_tool_version() {
     return 1
 }
 
-get_container_version() {
-    local image="$1"
+get_environment_version() {
+    local prefix="$1"
     shift
 
-    (( $# > 0 )) || { log_error 'get_container_version received no command'; return 2; }
-    run_container "$image" -- "$@"
+    (( $# > 0 )) || { log_error 'get_environment_version received no command'; return 2; }
+    run_environment "$prefix" -- "$@"
 }
 
 get_pipeline_version() {

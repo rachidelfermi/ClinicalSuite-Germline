@@ -16,7 +16,7 @@ readonly TEST_ROOT
 trap 'rm -rf -- "$TEST_ROOT"' EXIT
 CLINICAL_COLOR=never
 
-mkdir -p "$TEST_ROOT"/{runs,references,databases,containers,profiles,scratch,data,intervals}
+mkdir -p "$TEST_ROOT"/{runs,references,databases,envs,profiles,scratch,data,intervals}
 printf '@r1\nA\n+\n!\n' >"$TEST_ROOT/data/R1.fastq.gz"
 printf '@r2\nT\n+\n!\n' >"$TEST_ROOT/data/R2.fastq.gz"
 printf 'chr1\t0\t1\n' >"$TEST_ROOT/intervals/reportable.bed"
@@ -25,11 +25,11 @@ RUN_ID=INTEGRATION_001
 RUN_ROOT=runs
 REFERENCE_DIR=references
 DATABASE_DIR=databases
-CONTAINER_DIR=containers
+ENV_DIR=envs
 ASSAY_PROFILE_DIR=profiles
 ASSAY_PROFILE=wgs-v1.0
 SCRATCH_DIR=scratch
-APPTAINER_BIN=/usr/bin/apptainer
+MAMBA_BIN=/bin/true
 THREADS=6
 EOF
 cat >"$TEST_ROOT/samples.tsv" <<'EOF'
@@ -43,6 +43,6 @@ clinical_validate "$TEST_ROOT/clinical.conf" "$TEST_ROOT/samples.tsv" || {
 }
 [[ "$(config_get THREADS)" == 6 ]]
 [[ "$(config_require RUN_ROOT)" == "$TEST_ROOT/runs" ]]
-[[ "$(config_require APPTAINER_BIN)" == /usr/bin/apptainer ]]
+[[ "$(config_require MAMBA_BIN)" == /usr/bin/true ]]
 
 printf 'PASS: configuration/common-library integration test\n'

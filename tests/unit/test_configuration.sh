@@ -28,7 +28,7 @@ make_fixture() {
     local name="$1"
     local root="$TEST_ROOT/$name"
 
-    mkdir -p "$root"/{runs,references,databases,containers,profiles,scratch,data,intervals}
+    mkdir -p "$root"/{runs,references,databases,envs,profiles,scratch,data,intervals}
     printf '@read1\nACGT\n+\n!!!!\n' >"$root/data/sample_R1.fastq.gz"
     printf '@read2\nTGCA\n+\n!!!!\n' >"$root/data/sample_R2.fastq.gz"
     printf 'chr1\t0\t100\n' >"$root/intervals/capture.bed"
@@ -39,11 +39,11 @@ RUN_ID=RUN_001
 RUN_ROOT=runs
 REFERENCE_DIR=references
 DATABASE_DIR=databases
-CONTAINER_DIR=containers
+ENV_DIR=envs
 ASSAY_PROFILE_DIR=profiles
 ASSAY_PROFILE=wgs-v1.0
 SCRATCH_DIR=scratch
-APPTAINER_BIN=/bin/true
+MAMBA_BIN=/bin/true
 EOF
     cat >"$root/samples.tsv" <<'EOF'
 sample_id	assay	platform	fastq_r1	fastq_r2	library_id	platform_unit	sequencing_center	read_group_id	expected_chromosome_complement	capture_intervals	reportable_intervals
@@ -112,11 +112,11 @@ RUN_ID=RUN_001
 RUN_ID=RUN_002
 RUN_ROOT=runs
 DATABASE_DIR=
-CONTAINER_DIR=containers
+ENV_DIR=envs
 ASSAY_PROFILE_DIR=profiles
 ASSAY_PROFILE=wgs-v1.0
 SCRATCH_DIR=scratch
-APPTAINER_BIN=/bin/true
+MAMBA_BIN=/bin/true
 REFERENCE_PATH=references
 THREADS=many
 MALFORMED_LINE

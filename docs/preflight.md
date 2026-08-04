@@ -56,12 +56,11 @@ SHA-256.
 
 ## Validation and reports
 
-Checks cover Module 2 inputs and resolved identity, Bash/utilities, Apptainer,
-permissions, FASTQ structure/pair names, intervals, SIF checksums and executable
-versions, external-resource checksums, exact locked-reference compatibility, and
-disk space.
-Container executable/version expectations come directly from
-`containers/lib.sh`, the same matrix used by Module 4 release validation.
+Checks cover Module 2 inputs and resolved identity, Bash/utilities, Mamba,
+permissions, FASTQ structure/pair names, intervals, explicit environment locks
+and executable versions, external-resource checksums, exact locked-reference
+compatibility, and disk space. Executable/version expectations come directly
+from `envs/lib.sh`, the matrix shared with environment validation.
 `MIN_RUN_FREE_GB`, `MIN_SCRATCH_FREE_GB`, and `DISK_SPACE_POLICY` control the
 operational free-space gate.
 

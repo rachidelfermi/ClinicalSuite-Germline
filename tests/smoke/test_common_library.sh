@@ -31,11 +31,17 @@ check_complete_marker "$work_directory/module.complete" "$digest"
 run_command --stdout "$work_directory/version.txt" -- bash --version
 grep -Fq 'GNU bash' "$work_directory/version.txt" || fail 'run_command smoke output is wrong'
 
-container_output="$(run_container --apptainer /usr/bin/apptainer \
-    "$REPOSITORY_ROOT/containers/report.sif" -- python --version)"
-[[ "$container_output" == 'Python 3.12.12' ]] || fail "unexpected report container output: $container_output"
+environment_output="$(run_environment \
+    "$REPOSITORY_ROOT/envs/report" -- python --version)"
+[[ "$environment_output" == 'Python 3.12.12' ]] ||
+    fail "unexpected report environment output: $environment_output"
+declare -ga CLINICAL_CONFIG_KEYS=(MAMBA_BIN)
+declare -gA CLINICAL_CONFIG=(
+    [MAMBA_BIN]="${MAMBA_BIN:-/home/bio/anaconda3/envs/mamba/bin/mamba}"
+)
 report_environment "$work_directory/environment.txt"
-grep -Fq 'apptainer_version=' "$work_directory/environment.txt" || fail 'environment report is incomplete'
+grep -Fq 'mamba_version=' "$work_directory/environment.txt" ||
+    fail 'environment report is incomplete'
 report_progress 1 1 'Common library smoke test'
 
 printf 'PASS: common Bash library smoke test\n'

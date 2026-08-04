@@ -11,8 +11,8 @@ readonly SCRIPT_DIR
 REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 readonly REPOSITORY_ROOT
 readonly DEFAULT_OUTPUT_DIR="$SCRIPT_DIR/GRCh38"
-readonly ALIGNMENT_IMAGE="$REPOSITORY_ROOT/containers/alignment.sif"
-readonly APPTAINER_BIN="${APPTAINER_BIN:-/usr/bin/apptainer}"
+readonly ALIGNMENT_ENVIRONMENT="${ENV_DIR:-$REPOSITORY_ROOT/envs}/alignment"
+readonly ENV_ACTIVATE="$REPOSITORY_ROOT/envs/activate.sh"
 
 # This is the only reference identity accepted by ClinicalSuite V2.
 readonly REFERENCE_VERSION='GRCh38_full_analysis_set_plus_decoy_hla-20150309'
@@ -88,14 +88,16 @@ download_locked_sha256() {
         die "source SHA-256 mismatch for $destination"
 }
 
-run_alignment_container() {
+run_alignment_environment() {
     local reference_dir="$1"
     shift
+    local argument
+    local -a command=()
 
-    "$APPTAINER_BIN" exec --cleanenv --containall --no-home --pwd / \
-        --net --network none \
-        --bind "$reference_dir:/reference:rw" \
-        "$ALIGNMENT_IMAGE" "$@"
+    for argument in "$@"; do
+        command+=("${argument//\/reference/"$reference_dir"}")
+    done
+    "$ENV_ACTIVATE" "$ALIGNMENT_ENVIRONMENT" -- "${command[@]}"
 }
 
 validate_locked_fasta() {
@@ -297,10 +299,10 @@ main() {
     require_command curl
     require_command sha256sum
     require_command stat
-    [[ -x "$APPTAINER_BIN" ]] ||
-        die "Apptainer is unavailable: $APPTAINER_BIN"
-    [[ -s "$ALIGNMENT_IMAGE" ]] ||
-        die "alignment image is unavailable: $ALIGNMENT_IMAGE"
+    [[ -x "$ENV_ACTIVATE" ]] ||
+        die "environment launcher is unavailable: $ENV_ACTIVATE"
+    [[ -d "$ALIGNMENT_ENVIRONMENT/conda-meta" ]] ||
+        die "alignment environment is unavailable: $ALIGNMENT_ENVIRONMENT"
 
     mkdir -p -- "$output_dir"
     if verify_complete_bundle "$output_dir"; then
@@ -324,7 +326,7 @@ main() {
 
     if [[ ! -s "$output_dir/${FASTA_NAME}.fai" ]]; then
         printf 'INDEX: Samtools FASTA index\n'
-        run_alignment_container "$output_dir" \
+        run_alignment_environment "$output_dir" \
             samtools faidx -o "/reference/.${FASTA_NAME}.fai.tmp" \
             "/reference/$FASTA_NAME"
         mv -- "$output_dir/.${FASTA_NAME}.fai.tmp" \
@@ -336,7 +338,7 @@ main() {
 
     if [[ ! -s "$output_dir/$DICTIONARY_NAME" ]]; then
         printf 'INDEX: Picard sequence dictionary\n'
-        run_alignment_container "$output_dir" \
+        run_alignment_environment "$output_dir" \
             picard CreateSequenceDictionary \
             "R=/reference/$FASTA_NAME" \
             "O=/reference/.${DICTIONARY_NAME}.tmp"
@@ -353,7 +355,7 @@ main() {
     bwa_temporary="$output_dir/.bwa-mem2.tmp.$$"
     mkdir -p -- "$bwa_temporary"
     cp -- "$alt_path" "$bwa_temporary/$ALT_NAME"
-    run_alignment_container "$output_dir" \
+    run_alignment_environment "$output_dir" \
         bwa-mem2 index \
         -p "/reference/${bwa_temporary##"$output_dir/"}/${FASTA_NAME}" \
         "/reference/$FASTA_NAME"

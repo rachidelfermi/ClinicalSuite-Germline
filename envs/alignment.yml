@@ -1,0 +1,11 @@
+name: clinicalsuite-alignment
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bwa-mem2=2.3
+  - samtools=1.24
+  - picard=3.4.0
+  - mosdepth=0.3.14
+  - gatk4=4.6.2.0
+  - openjdk=17.0.18

@@ -7,13 +7,13 @@ caller shell options and performs no work merely by being sourced.
 the helpers below, validates the complete runtime, and never starts analysis.
 
 `bin/qc.sh` is Module 6. It is invoked only after successful preflight and
-orchestrates the immutable `qc.sif` dependency. It performs raw FastQC,
+orchestrates the immutable `qc` Conda environment. It performs raw FastQC,
 non-modifying fastp reporting, MultiQC aggregation, policy evaluation,
 provenance capture, atomic publication, and checkpoint reuse.
 
 `bin/alignment.sh` is Module 7. It consumes only Module 6's checksum-verified
 FASTQ handoff and orchestrates BWA-MEM2, Samtools, Picard MarkDuplicates, and
-GATK BQSR through the common container wrapper. It provides per-step resumable
+GATK BQSR through the common environment wrapper. It provides per-step resumable
 checkpoints, strict analysis-ready BAM validation, provenance, and atomic
 publication. See `docs/alignment.md`.
 
@@ -27,10 +27,10 @@ publication. See `docs/alignment.md`.
   `setup_cleanup_traps`
 - Filesystem/checkpoints: `create_directory`, `safe_copy`, `safe_move`,
   `atomic_write`, `create_complete_marker`, `check_complete_marker`
-- Execution: `run_command`, `run_container`
+- Execution: `run_command`, `run_environment`
 - Structural validation: `check_fastq`, `check_bam`, `check_vcf`, `check_index`,
   `calculate_checksum`, `check_checksum`
-- Provenance: `get_tool_version`, `get_container_version`,
+- Provenance: `get_tool_version`, `get_environment_version`,
   `get_pipeline_version`, `report_environment`
 - Progress/timing/configuration: `report_progress`, `start_timer`, `stop_timer`,
   `config_get`, `config_require`
@@ -55,11 +55,11 @@ create_temp_directory work_dir "$SCRATCH_DIR" alignment
 the final status and elapsed whole seconds in `RUN_COMMAND_STATUS` and
 `RUN_COMMAND_ELAPSED_SECONDS`.
 
-`run_container` accepts an image, zero or more
-`--bind-ro HOST CONTAINER`/`--bind-rw HOST CONTAINER` triples, then `-- COMMAND`.
-It uses validated `APPTAINER_BIN` unless `--apptainer PATH` is explicitly supplied.
-The wrapper uses a clean, contained environment and a `none` network namespace.
-No reference, database, run, or scratch paths are hard-coded.
+`run_environment` accepts a prefix, zero or more
+`--bind-ro HOST LOGICAL`/`--bind-rw HOST LOGICAL` triples, then `-- COMMAND`.
+The logical paths preserve module command interfaces while the wrapper maps them
+to validated host paths and executes with the prefix first in an isolated
+`PATH`. No reference, database, run, or scratch paths are hard-coded.
 
 Checkpoint signatures are 64-character SHA-256 digests. Future modules must make
 the signature cover the resolved command plus input/output checksums. An optional
